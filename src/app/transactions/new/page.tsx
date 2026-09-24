@@ -15,9 +15,18 @@ import {
   Sparkles,
   FileText,
   AlertCircle,
+  Printer,
+  RotateCcw,
+  X,
+  AlertTriangle,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import type { Service, PaymentStatus } from "@/types";
+
+interface ToastMessage {
+  type: "success" | "error";
+  text: string;
+}
 
 const defaultServices: Service[] = [
   {
@@ -97,6 +106,7 @@ export default function NewTransactionPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [createdInvoice, setCreatedInvoice] = useState("");
+  const [toast, setToast] = useState<ToastMessage | null>(null);
 
   const nameInputId = useId();
   const phoneInputId = useId();
@@ -118,11 +128,17 @@ export default function NewTransactionPage() {
           setSelectedServiceId(data[0].id);
         }
       } catch {
-        // Fallback to default mock services
+        // Fallback to default services
       }
     }
     loadServices();
   }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   const currentService =
     services.find((s) => s.id === selectedServiceId) || services[0];
@@ -161,61 +177,73 @@ export default function NewTransactionPage() {
     try {
       let customerId: string | null = null;
 
-      try {
-        const { data: existingCustomer } = await supabase
+      const { data: existingCustomer, error: findError } = await supabase
+        .from("customers")
+        .select("id")
+        .eq("phone", customerPhone.trim())
+        .maybeSingle();
+
+      if (findError) throw findError;
+
+      if (existingCustomer?.id) {
+        customerId = existingCustomer.id;
+      } else {
+        const { data: newCustomer, error: insertCustomerError } = await supabase
           .from("customers")
+          .insert({
+            name: customerName.trim(),
+            phone: customerPhone.trim(),
+            address: customerAddress.trim() || null,
+          })
           .select("id")
-          .eq("phone", customerPhone.trim())
-          .maybeSingle();
+          .single();
 
-        if (existingCustomer?.id) {
-          customerId = existingCustomer.id;
-        } else {
-          const { data: newCustomer } = await supabase
-            .from("customers")
-            .insert({
-              name: customerName.trim(),
-              phone: customerPhone.trim(),
-              address: customerAddress.trim() || null,
-            })
-            .select()
-            .single();
-
-          if (newCustomer?.id) {
-            customerId = newCustomer.id;
-          }
-        }
-
-        if (customerId && currentService) {
-          const { data: tx } = await supabase
-            .from("transactions")
-            .insert({
-              invoice: invoiceNumber,
-              customer_id: customerId,
-              total_weight: parsedQty,
-              total_amount: grandTotal,
-              payment_status: paymentStatus,
-              order_status: "pending",
-              notes: notes.trim() || null,
-            })
-            .select()
-            .single();
-
-          if (tx?.id) {
-            await supabase.from("transaction_items").insert({
-              transaction_id: tx.id,
-              service_id: currentService.id,
-              qty: parsedQty,
-              subtotal,
-            });
-          }
-        }
-      } catch {
-        // Continue for UI simulation when offline
+        if (insertCustomerError) throw insertCustomerError;
+        customerId = newCustomer.id;
       }
+
+      const { data: newTx, error: insertTxError } = await supabase
+        .from("transactions")
+        .insert({
+          invoice: invoiceNumber,
+          customer_id: customerId,
+          total_weight: parsedQty,
+          total_amount: grandTotal,
+          payment_status: paymentStatus,
+          order_status: "pending",
+          notes: notes.trim() || null,
+        })
+        .select("id")
+        .single();
+
+      if (insertTxError) throw insertTxError;
+
+      const { error: insertItemError } = await supabase
+        .from("transaction_items")
+        .insert({
+          transaction_id: newTx.id,
+          service_id: currentService.id,
+          qty: parsedQty,
+          subtotal,
+        });
+
+      if (insertItemError) throw insertItemError;
 
       setCreatedInvoice(invoiceNumber);
       setIsSuccess(true);
+      setToast({
+        type: "success",
+        text: `Transaksi ${invoiceNumber} berhasil disimpan ke database!`,
+      });
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Gagal menghubungkan ke database Supabase.";
+      setToast({
+        type: "error",
+        text: `Gagal menyimpan transaksi: ${message}`,
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -233,9 +261,41 @@ export default function NewTransactionPage() {
     setIsSuccess(false);
   };
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {toast && (
+        <div
+          className={`fixed top-4 right-4 z-50 flex items-center gap-3 rounded-xl border p-4 shadow-lg transition-all no-print ${
+            toast.type === "success"
+              ? "border-success/30 bg-white text-dark shadow-success/10"
+              : "border-danger/30 bg-white text-dark shadow-danger/10"
+          }`}
+        >
+          {toast.type === "success" ? (
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-success/10 text-success">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+          ) : (
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-danger/10 text-danger">
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+          )}
+          <span className="text-xs font-semibold">{toast.text}</span>
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            className="text-gray-400 hover:text-dark ml-2"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <Link
@@ -247,7 +307,7 @@ export default function NewTransactionPage() {
             <h1 className="text-xl font-bold text-dark">Input Transaksi Manual</h1>
           </div>
           <p className="text-xs text-gray-500">
-            Pencatatan langsung cucian walk-in dengan kalkulasi nota otomatis
+            Pencatatan langsung cucian walk-in dengan penyimpanan otomatis ke Supabase
           </p>
         </div>
 
@@ -260,7 +320,7 @@ export default function NewTransactionPage() {
       </div>
 
       {isSuccess && (
-        <div className="rounded-xl border border-success/30 bg-success/10 p-5">
+        <div className="rounded-xl border border-success/30 bg-success/10 p-5 no-print">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success text-white">
@@ -271,17 +331,26 @@ export default function NewTransactionPage() {
                   Transaksi Berhasil Disimpan!
                 </h3>
                 <p className="text-xs text-gray-600">
-                  Nomor nota <span className="font-semibold text-dark">{createdInvoice}</span> telah terdaftar dalam antrean pengerjaan.
+                  Nomor nota <span className="font-semibold text-dark">{createdInvoice}</span> telah tersimpan di database Supabase.
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handlePrint}
+                className="flex items-center gap-1.5 rounded-lg bg-white border border-gray-200 px-3.5 py-2 text-xs font-semibold text-dark shadow-xs hover:bg-gray-50 transition-colors"
+              >
+                <Printer className="h-4 w-4 text-primary" />
+                Cetak Nota
+              </button>
               <button
                 type="button"
                 onClick={handleReset}
-                className="rounded-lg bg-white border border-gray-200 px-3.5 py-2 text-xs font-semibold text-dark shadow-xs hover:bg-gray-50 transition-colors"
+                className="flex items-center gap-1.5 rounded-lg bg-white border border-gray-200 px-3.5 py-2 text-xs font-semibold text-dark shadow-xs hover:bg-gray-50 transition-colors"
               >
-                + Catat Transaksi Lain
+                <RotateCcw className="h-4 w-4" />
+                Reset Form
               </button>
               <Link
                 href="/"
@@ -295,7 +364,7 @@ export default function NewTransactionPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        <div className="lg:col-span-7 bg-white rounded-xl border border-gray-200/80 p-6 shadow-xs">
+        <div className="lg:col-span-7 bg-white rounded-xl border border-gray-200/80 p-6 shadow-xs no-print">
           <div className="flex items-center gap-2 pb-4 mb-5 border-b border-gray-100">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <FileText className="h-4 w-4" />
@@ -303,7 +372,7 @@ export default function NewTransactionPage() {
             <div>
               <h2 className="text-sm font-bold text-dark">Formulir Pesanan</h2>
               <p className="text-[11px] text-gray-400">
-                Isi data pelanggan dan rincian cucian
+                Data akan langsung terhubung ke database Supabase
               </p>
             </div>
           </div>
@@ -516,7 +585,7 @@ export default function NewTransactionPage() {
                 className="w-full flex items-center justify-center gap-2 rounded-lg bg-primary py-2.5 px-4 text-xs font-bold text-white shadow-xs hover:bg-primary/90 disabled:opacity-50 transition-colors"
               >
                 {isSubmitting ? (
-                  <>Menyimpan Transaksi...</>
+                  <>Menyimpan ke Supabase...</>
                 ) : (
                   <>
                     <CheckCircle2 className="h-4 w-4" />
@@ -529,8 +598,11 @@ export default function NewTransactionPage() {
         </div>
 
         <div className="lg:col-span-5 space-y-4">
-          <div className="rounded-xl border border-gray-200/80 bg-white p-6 shadow-xs relative overflow-hidden">
-            <div className="absolute -right-6 -bottom-6 text-gray-50/80 pointer-events-none select-none">
+          <div
+            id="printable-receipt"
+            className="rounded-xl border border-gray-200/80 bg-white p-6 shadow-xs relative overflow-hidden"
+          >
+            <div className="absolute -right-6 -bottom-6 text-gray-50/80 pointer-events-none select-none no-print">
               <Receipt className="h-40 w-40" />
             </div>
 
@@ -630,6 +702,17 @@ export default function NewTransactionPage() {
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-dashed border-gray-200 no-print flex gap-2">
+              <button
+                type="button"
+                onClick={handlePrint}
+                className="w-full flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-gray-50/80 py-2 px-3 text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
+              >
+                <Printer className="h-3.5 w-3.5 text-gray-500" />
+                Cetak Lembar Nota
+              </button>
             </div>
           </div>
         </div>
