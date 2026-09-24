@@ -59,3 +59,35 @@ export interface DashboardMetrics {
   activeOrders: number;
   newCustomers: number;
 }
+
+export interface Database {
+  public: {
+    Tables: {
+      services: {
+        Row: Service;
+        Insert: Omit<Service, "id" | "created_at"> & { id?: string; created_at?: string };
+        Update: Partial<Omit<Service, "id">>;
+      };
+      customers: {
+        Row: Customer;
+        Insert: Omit<Customer, "id" | "created_at"> & { id?: string; created_at?: string };
+        Update: Partial<Omit<Customer, "id">>;
+      };
+      transactions: {
+        Row: Transaction;
+        Insert: Omit<Transaction, "id" | "created_at" | "customer" | "items"> & { id?: string; created_at?: string };
+        Update: Partial<Omit<Transaction, "id" | "customer" | "items">>;
+      };
+      transaction_items: {
+        Row: TransactionItem;
+        Insert: Omit<TransactionItem, "id" | "service"> & { id?: string };
+        Update: Partial<Omit<TransactionItem, "id" | "service">>;
+      };
+      settings: {
+        Row: Setting;
+        Insert: Omit<Setting, "id" | "updated_at"> & { id?: string; updated_at?: string };
+        Update: Partial<Omit<Setting, "id">>;
+      };
+    };
+  };
+}
