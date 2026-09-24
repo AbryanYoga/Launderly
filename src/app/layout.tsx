@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { DashboardShell } from "@/components/layout";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,7 +25,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="id" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-dashboard text-sidebar">{children}</body>
+      <body className="min-h-full bg-dashboard text-[#495057]">
+        <DashboardShell>{children}</DashboardShell>
+      </body>
     </html>
   );
 }
