@@ -7,3 +7,17 @@ VALUES
 INSERT INTO settings (outlet_name, outlet_phone, outlet_address, receipt_footer)
 VALUES
     ('Laundry Insight', '081234567890', 'Jl. Utama No. 123', 'Terima kasih telah mempercayakan pakaian Anda kepada kami.');
+
+INSERT INTO categories (name, is_active)
+VALUES
+    ('Kiloan', true),
+    ('Satuan', true),
+    ('Express', true),
+    ('Setrika', true);
+
+INSERT INTO payment_methods (name, is_active)
+VALUES
+    ('Cash', true),
+    ('Transfer Bank', true),
+    ('QRIS', true),
+    ('E-Wallet', true);

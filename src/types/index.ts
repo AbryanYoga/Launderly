@@ -4,6 +4,20 @@ export type PaymentStatus = "unpaid" | "paid";
 
 export type OrderStatus = "pending" | "washing" | "ironing" | "completed";
 
+export interface Category {
+  id: string;
+  name: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface PaymentMethod {
+  id: string;
+  name: string;
+  is_active: boolean;
+  created_at: string;
+}
+
 export interface Service {
   id: string;
   name: string;
@@ -11,6 +25,8 @@ export interface Service {
   price: number;
   is_active: boolean;
   created_at: string;
+  category_id?: string | null;
+  category?: Category;
 }
 
 export interface Customer {
@@ -40,8 +56,10 @@ export interface Transaction {
   order_status: OrderStatus;
   notes?: string | null;
   created_at: string;
+  payment_method_id?: string | null;
   customer?: Customer;
   items?: TransactionItem[];
+  payment_method?: PaymentMethod;
 }
 
 export interface Setting {
@@ -63,10 +81,20 @@ export interface DashboardMetrics {
 export interface Database {
   public: {
     Tables: {
+      categories: {
+        Row: Category;
+        Insert: Omit<Category, "id" | "created_at"> & { id?: string; created_at?: string };
+        Update: Partial<Omit<Category, "id">>;
+      };
+      payment_methods: {
+        Row: PaymentMethod;
+        Insert: Omit<PaymentMethod, "id" | "created_at"> & { id?: string; created_at?: string };
+        Update: Partial<Omit<PaymentMethod, "id">>;
+      };
       services: {
         Row: Service;
-        Insert: Omit<Service, "id" | "created_at"> & { id?: string; created_at?: string };
-        Update: Partial<Omit<Service, "id">>;
+        Insert: Omit<Service, "id" | "created_at" | "category"> & { id?: string; created_at?: string };
+        Update: Partial<Omit<Service, "id" | "category">>;
       };
       customers: {
         Row: Customer;
@@ -75,8 +103,8 @@ export interface Database {
       };
       transactions: {
         Row: Transaction;
-        Insert: Omit<Transaction, "id" | "created_at" | "customer" | "items"> & { id?: string; created_at?: string };
-        Update: Partial<Omit<Transaction, "id" | "customer" | "items">>;
+        Insert: Omit<Transaction, "id" | "created_at" | "customer" | "items" | "payment_method"> & { id?: string; created_at?: string };
+        Update: Partial<Omit<Transaction, "id" | "customer" | "items" | "payment_method">>;
       };
       transaction_items: {
         Row: TransactionItem;
@@ -91,3 +119,4 @@ export interface Database {
     };
   };
 }
+
