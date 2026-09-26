@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useId, useMemo } from "react";
+import { useState, useEffect, useRef, useId, useMemo } from "react";
 import Link from "next/link";
 import {
   FileSpreadsheet,
@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase/client";
-import type { Service } from "@/types";
+import type { Service, PaymentMethod } from "@/types";
 
 export interface ParsedRow {
   namaPelanggan: string;
@@ -30,9 +30,39 @@ export interface ParsedRow {
   total: number;
   tanggal: string;
   statusBayar: string;
+  metodeBayar: string;
+  resolvedPaymentName: string;
+  isPaymentDefaulted: boolean;
   isValid: boolean;
   errors: string[];
 }
+
+const defaultPaymentMethods: PaymentMethod[] = [
+  {
+    id: "pm-1",
+    name: "Cash",
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: "pm-2",
+    name: "Transfer Bank",
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: "pm-3",
+    name: "QRIS",
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: "pm-4",
+    name: "E-Wallet",
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+];
 
 function generateInvoice(): string {
   const d = new Date();
@@ -51,6 +81,8 @@ export default function ImportTransactionsPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [filterTab, setFilterTab] = useState<"all" | "valid" | "invalid">("all");
+  const [paymentMethods, setPaymentMethods] =
+    useState<PaymentMethod[]>(defaultPaymentMethods);
 
   const [saveProgress, setSaveProgress] = useState<{
     current: number;
@@ -61,6 +93,25 @@ export default function ImportTransactionsPage() {
 
   const fileInputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    async function loadPaymentMethods() {
+      try {
+        const { data } = await supabase
+          .from("payment_methods")
+          .select("*")
+          .eq("is_active", true)
+          .order("created_at", { ascending: true });
+
+        if (data && data.length > 0) {
+          setPaymentMethods(data as PaymentMethod[]);
+        }
+      } catch {
+        // Use defaultPaymentMethods
+      }
+    }
+    loadPaymentMethods();
+  }, []);
 
   const validRows = useMemo(
     () => parsedRows.filter((r) => r.isValid),
@@ -95,6 +146,7 @@ export default function ImportTransactionsPage() {
         "Total": 28000,
         "Tanggal": new Date().toISOString().split("T")[0],
         "Status Bayar": "Lunas",
+        "Metode Pembayaran": "Cash",
       },
       {
         "Nama Pelanggan": "Siti Rahma",
@@ -104,6 +156,7 @@ export default function ImportTransactionsPage() {
         "Total": 12000,
         "Tanggal": new Date().toISOString().split("T")[0],
         "Status Bayar": "Belum Lunas",
+        "Metode Pembayaran": "QRIS",
       },
       {
         "Nama Pelanggan": "Ahmad Dani",
@@ -113,6 +166,7 @@ export default function ImportTransactionsPage() {
         "Total": 25000,
         "Tanggal": new Date().toISOString().split("T")[0],
         "Status Bayar": "Lunas",
+        "Metode Pembayaran": "Transfer Bank",
       },
     ];
 
@@ -128,6 +182,7 @@ export default function ImportTransactionsPage() {
       { wch: 14 },
       { wch: 14 },
       { wch: 16 },
+      { wch: 20 },
     ];
 
     XLSX.writeFile(workbook, "template_transaksi_laundry.xlsx");
@@ -170,6 +225,10 @@ export default function ImportTransactionsPage() {
           return;
         }
 
+        const activePMs =
+          paymentMethods.length > 0 ? paymentMethods : defaultPaymentMethods;
+        const defaultPM = activePMs[0];
+
         const normalized: ParsedRow[] = rawJson.map((row) => {
           const findKey = (candidates: string[]): string => {
             const keys = Object.keys(row);
@@ -205,9 +264,18 @@ export default function ImportTransactionsPage() {
           const tanggalRaw = findKey(["tanggal", "date", "tgl"]);
           const statusBayarRaw = findKey([
             "status bayar",
+            "status pembayaran",
             "status",
-            "payment",
             "payment status",
+          ]);
+          const metodeBayarRaw = findKey([
+            "metode pembayaran",
+            "metode bayar",
+            "payment method",
+            "metode_pembayaran",
+            "metode_bayar",
+            "payment_method",
+            "cara bayar",
           ]);
 
           const berat = parseFloat(beratRaw) || 0;
@@ -217,6 +285,19 @@ export default function ImportTransactionsPage() {
             statusBayarRaw.toLowerCase() === "paid"
               ? "Lunas"
               : "Belum Lunas";
+
+          // Match payment method
+          const matchedPM = activePMs.find(
+            (p) =>
+              metodeBayarRaw &&
+              (p.name.toLowerCase().includes(metodeBayarRaw.toLowerCase()) ||
+                metodeBayarRaw.toLowerCase().includes(p.name.toLowerCase()))
+          );
+
+          const resolvedPaymentName = matchedPM
+            ? matchedPM.name
+            : defaultPM.name;
+          const isPaymentDefaulted = !matchedPM;
 
           const errors: string[] = [];
           if (!nama) errors.push("Nama pelanggan kosong");
@@ -237,6 +318,9 @@ export default function ImportTransactionsPage() {
             total,
             tanggal: tanggalRaw || new Date().toISOString().split("T")[0],
             statusBayar,
+            metodeBayar: metodeBayarRaw,
+            resolvedPaymentName,
+            isPaymentDefaulted,
             isValid: errors.length === 0,
             errors,
           };
@@ -309,18 +393,24 @@ export default function ImportTransactionsPage() {
     setSaveProgress({
       current: 0,
       total: validRows.length,
-      stage: "Menyiapkan data layanan...",
+      stage: "Menyiapkan master layanan dan metode pembayaran...",
     });
 
     try {
       let activeServices: Service[] = [];
-      const { data: dbServices } = await supabase
-        .from("services")
-        .select("*")
-        .eq("is_active", true);
+      let activePaymentMethods: PaymentMethod[] = [];
 
-      if (dbServices && dbServices.length > 0) {
-        activeServices = dbServices as Service[];
+      const [servicesRes, paymentsRes] = await Promise.all([
+        supabase.from("services").select("*").eq("is_active", true),
+        supabase
+          .from("payment_methods")
+          .select("*")
+          .eq("is_active", true)
+          .order("created_at", { ascending: true }),
+      ]);
+
+      if (servicesRes.data && servicesRes.data.length > 0) {
+        activeServices = servicesRes.data as Service[];
       } else {
         activeServices = [
           {
@@ -332,6 +422,14 @@ export default function ImportTransactionsPage() {
             created_at: new Date().toISOString(),
           },
         ];
+      }
+
+      if (paymentsRes.data && paymentsRes.data.length > 0) {
+        activePaymentMethods = paymentsRes.data as PaymentMethod[];
+      } else if (paymentMethods.length > 0) {
+        activePaymentMethods = paymentMethods;
+      } else {
+        activePaymentMethods = defaultPaymentMethods;
       }
 
       setSaveProgress({
@@ -390,6 +488,14 @@ export default function ImportTransactionsPage() {
             s.name.toLowerCase().includes(row.layanan.toLowerCase())
           ) || activeServices[0];
 
+        const matchedPayment =
+          activePaymentMethods.find(
+            (p) =>
+              row.metodeBayar &&
+              (p.name.toLowerCase().includes(row.metodeBayar.toLowerCase()) ||
+                row.metodeBayar.toLowerCase().includes(p.name.toLowerCase()))
+          ) || activePaymentMethods[0];
+
         const inv = generateInvoice();
         const pStatus = row.statusBayar === "Lunas" ? "paid" : "unpaid";
 
@@ -401,6 +507,7 @@ export default function ImportTransactionsPage() {
             total_weight: row.berat,
             total_amount: row.total,
             payment_status: pStatus,
+            payment_method_id: matchedPayment?.id || null,
             order_status: "pending",
             notes: "Import Batch Spreadsheet",
             created_at: new Date(row.tanggal).toISOString(),
@@ -457,7 +564,8 @@ export default function ImportTransactionsPage() {
             <h1 className="text-xl font-bold text-dark">Import Batch Transaksi</h1>
           </div>
           <p className="text-xs text-gray-500">
-            Upload spreadsheet Excel (.xlsx, .xls) atau CSV untuk mengekstrak dan menyimpan data transaksi secara batch
+            Upload spreadsheet Excel (.xlsx, .xls) atau CSV untuk mengekstrak dan
+            menyimpan data transaksi secara batch
           </p>
         </div>
 
@@ -490,7 +598,8 @@ export default function ImportTransactionsPage() {
                   Batch Simpan Berhasil!
                 </h3>
                 <p className="text-xs text-gray-600">
-                  Sebanyak <span className="font-bold text-dark">{savedCount}</span> data transaksi valid berhasil disimpan ke database Supabase.
+                  Sebanyak <span className="font-bold text-dark">{savedCount}</span>{" "}
+                  data transaksi valid berhasil disimpan ke database Supabase.
                 </p>
               </div>
             </div>
@@ -603,12 +712,20 @@ export default function ImportTransactionsPage() {
               <p className="text-base font-bold text-dark">{parsedRows.length}</p>
             </div>
             <div className="rounded-lg bg-success/5 p-3 border border-success/20 text-center">
-              <span className="text-[11px] text-success font-medium">Baris Valid</span>
-              <p className="text-base font-bold text-success">{validRows.length}</p>
+              <span className="text-[11px] text-success font-medium">
+                Baris Valid
+              </span>
+              <p className="text-base font-bold text-success">
+                {validRows.length}
+              </p>
             </div>
             <div className="rounded-lg bg-danger/5 p-3 border border-danger/20 text-center">
-              <span className="text-[11px] text-danger font-medium">Baris Error</span>
-              <p className="text-base font-bold text-danger">{invalidRows.length}</p>
+              <span className="text-[11px] text-danger font-medium">
+                Baris Error
+              </span>
+              <p className="text-base font-bold text-danger">
+                {invalidRows.length}
+              </p>
             </div>
           </div>
 
@@ -638,11 +755,16 @@ export default function ImportTransactionsPage() {
       {parsedRows.length > 0 && !saveProgress && (
         <div className="rounded-xl border border-gray-200/80 bg-white shadow-xs overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border-b border-gray-100 bg-[#F8F9FA] gap-3">
-            <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-primary" />
-              <h2 className="text-xs font-bold text-dark uppercase tracking-wider">
-                Pratinjau Data Ekstraksi ({parsedRows.length} Baris)
-              </h2>
+            <div>
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-primary" />
+                <h2 className="text-xs font-bold text-dark uppercase tracking-wider">
+                  Pratinjau Data Ekstraksi ({parsedRows.length} Baris)
+                </h2>
+              </div>
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                Pastikan kolom data sudah sesuai. Baris dengan metode bayar kosong/tidak cocok otomatis menggunakan metode default.
+              </p>
             </div>
 
             <div className="flex items-center gap-1.5 self-start sm:self-auto bg-white p-1 rounded-lg border border-gray-200 text-xs">
@@ -695,6 +817,7 @@ export default function ImportTransactionsPage() {
                   <th className="py-3 px-4">Total</th>
                   <th className="py-3 px-4">Tanggal</th>
                   <th className="py-3 px-4">Status Bayar</th>
+                  <th className="py-3 px-4">Metode Bayar</th>
                   <th className="py-3 px-4 text-center">Status / Catatan</th>
                 </tr>
               </thead>
@@ -778,15 +901,37 @@ export default function ImportTransactionsPage() {
                         {row.statusBayar}
                       </span>
                     </td>
+                    <td className="py-3 px-4">
+                      <div className="flex flex-col gap-0.5 items-start">
+                        <span className="font-semibold text-dark">
+                          {row.resolvedPaymentName}
+                        </span>
+                        {row.isPaymentDefaulted && (
+                          <span
+                            title="Metode pembayaran tidak dicantumkan atau tidak cocok, otomatis menggunakan default"
+                            className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-warning/15 text-[#c2841d] border border-warning/30"
+                          >
+                            Default
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="py-3 px-4 text-center">
                       {row.isValid ? (
-                        <span
-                          title="Baris valid"
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-success/15 text-success"
-                        >
-                          <Check className="h-3 w-3" />
-                          Valid
-                        </span>
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span
+                            title="Baris valid"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-success/15 text-success"
+                          >
+                            <Check className="h-3 w-3" />
+                            Valid
+                          </span>
+                          {row.isPaymentDefaulted && (
+                            <span className="text-[9px] text-gray-400">
+                              (Metode default)
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         <span
                           title={row.errors.join(", ")}
