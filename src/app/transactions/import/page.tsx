@@ -22,6 +22,7 @@ import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
 import { supabase } from "@/lib/supabase/client";
 import type { Service, PaymentMethod, Category } from "@/types";
+import { Toast, type ToastMessage } from "@/components/Toast";
 
 export interface ParsedRow {
   namaPelanggan: string;
@@ -81,6 +82,7 @@ export default function ImportTransactionsPage() {
   const [fileSize, setFileSize] = useState<string | null>(null);
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
   const [filterTab, setFilterTab] = useState<"all" | "valid" | "invalid">("all");
@@ -141,6 +143,7 @@ export default function ImportTransactionsPage() {
 
   const handleDownloadTemplate = async () => {
     setIsDownloadingTemplate(true);
+    setErrorMessage(null);
     try {
       const [categoriesRes, servicesRes, paymentsRes] = await Promise.all([
         supabase
@@ -160,6 +163,27 @@ export default function ImportTransactionsPage() {
           .order("created_at", { ascending: true }),
       ]);
 
+      if (categoriesRes.error) {
+        const errMsg = `Gagal mengambil data Kategori: ${categoriesRes.error.message}`;
+        console.error("Gagal mengambil data Kategori:", categoriesRes.error);
+        setErrorMessage(errMsg);
+        return;
+      }
+
+      if (servicesRes.error) {
+        const errMsg = `Gagal mengambil data Layanan: ${servicesRes.error.message}`;
+        console.error("Gagal mengambil data Layanan:", servicesRes.error);
+        setErrorMessage(errMsg);
+        return;
+      }
+
+      if (paymentsRes.error) {
+        const errMsg = `Gagal mengambil data Metode Pembayaran: ${paymentsRes.error.message}`;
+        console.error("Gagal mengambil data Metode Pembayaran:", paymentsRes.error);
+        setErrorMessage(errMsg);
+        return;
+      }
+
       const categoriesList = (categoriesRes.data || [])
         .map((c: { name: string }) => c.name.trim())
         .filter(Boolean);
@@ -170,6 +194,25 @@ export default function ImportTransactionsPage() {
         .map((p: { name: string }) => p.name.trim())
         .filter(Boolean);
       const statusBayarList = ["Lunas", "Belum Lunas"];
+
+      const emptyColumns: string[] = [];
+      if (categoriesList.length === 0) emptyColumns.push("Kategori");
+      if (servicesList.length === 0) emptyColumns.push("Layanan");
+      if (paymentsList.length === 0) emptyColumns.push("Metode Pembayaran");
+
+      if (emptyColumns.length > 0) {
+        const formattedColumns =
+          emptyColumns.length === 1
+            ? emptyColumns[0]
+            : emptyColumns.slice(0, -1).join(", ") +
+              " dan " +
+              emptyColumns[emptyColumns.length - 1];
+
+        setToast({
+          type: "warning",
+          text: `File berhasil dibuat, tapi kolom ${formattedColumns} tidak punya dropdown karena belum ada data aktif di Settings. Tambahkan data di Settings dulu untuk mengaktifkan dropdown ini.`,
+        });
+      }
 
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Template Transaksi");
@@ -252,6 +295,7 @@ export default function ImportTransactionsPage() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err: unknown) {
+      console.error("Terjadi kesalahan saat men-generate template Excel:", err);
       const msg =
         err instanceof Error ? err.message : "Gagal mengunduh template.";
       setErrorMessage(`Gagal men-generate template: ${msg}`);
@@ -711,6 +755,8 @@ export default function ImportTransactionsPage() {
 
   return (
     <div className="space-y-6">
+      <Toast toast={toast} onClose={() => setToast(null)} />
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
