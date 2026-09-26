@@ -310,39 +310,66 @@ export default function NewTransactionPage() {
         customerId = newCustomer.id;
       }
 
-      const { data: newTx, error: insertTxError } = await supabase
-        .from("transactions")
-        .insert({
-          invoice: invoiceNumber,
-          customer_id: customerId,
-          total_weight: parsedQty,
-          total_amount: grandTotal,
-          payment_status: paymentStatus,
-          payment_method_id: selectedPaymentMethodId || null,
-          order_status: "pending",
-          notes: notes.trim() || null,
-        })
-        .select("id")
-        .single();
+      // 1. Cek keunikan invoice di DB (retry maksimal 3 kali jika terjadi bentrok)
+      let finalInvoice = invoiceNumber;
+      const maxRetries = 3;
+      let isUnique = false;
 
-      if (insertTxError) throw insertTxError;
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        const { data: existingTx, error: checkError } = await supabase
+          .from("transactions")
+          .select("id")
+          .eq("invoice", finalInvoice)
+          .maybeSingle();
 
-      const { error: insertItemError } = await supabase
-        .from("transaction_items")
-        .insert({
-          transaction_id: newTx.id,
-          service_id: currentService.id,
-          qty: parsedQty,
-          subtotal,
-        });
+        if (checkError) throw checkError;
 
-      if (insertItemError) throw insertItemError;
+        if (!existingTx) {
+          isUnique = true;
+          break;
+        }
 
-      setCreatedInvoice(invoiceNumber);
+        if (attempt < maxRetries) {
+          finalInvoice = generateInvoice();
+        }
+      }
+
+      if (!isUnique) {
+        throw new Error(
+          "Nomor nota bentrok dan gagal mendapatkan nomor unik setelah 3 kali percobaan. Silakan coba lagi."
+        );
+      }
+
+      if (finalInvoice !== invoiceNumber) {
+        setInvoiceNumber(finalInvoice);
+      }
+
+      // 2. Simpan transaksi & item secara atomic melalui Postgres function RPC
+      const { error: rpcError } = await supabase.rpc(
+        "create_transaction_with_item",
+        {
+          p_invoice: finalInvoice,
+          p_customer_id: customerId,
+          p_total_weight: parsedQty,
+          p_total_amount: grandTotal,
+          p_payment_status: paymentStatus,
+          p_payment_method_id: selectedPaymentMethodId || null,
+          p_order_status: "pending",
+          p_notes: notes.trim() || null,
+          p_created_at: new Date().toISOString(),
+          p_service_id: currentService ? currentService.id : null,
+          p_qty: parsedQty,
+          p_subtotal: subtotal,
+        }
+      );
+
+      if (rpcError) throw rpcError;
+
+      setCreatedInvoice(finalInvoice);
       setIsSuccess(true);
       setToast({
         type: "success",
-        text: `Transaksi ${invoiceNumber} berhasil disimpan ke database!`,
+        text: `Transaksi ${finalInvoice} berhasil disimpan ke database!`,
       });
     } catch (err: unknown) {
       const message =

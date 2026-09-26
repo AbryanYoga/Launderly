@@ -117,6 +117,37 @@ export interface Database {
         Update: Partial<Omit<Setting, "id">>;
       };
     };
+    Functions: {
+      create_transaction_with_item: {
+        Args: {
+          p_invoice: string;
+          p_customer_id: string;
+          p_total_weight: number;
+          p_total_amount: number;
+          p_payment_status?: string;
+          p_payment_method_id?: string | null;
+          p_order_status?: string;
+          p_notes?: string | null;
+          p_created_at?: string;
+          p_service_id?: string | null;
+          p_qty?: number;
+          p_subtotal?: number;
+        };
+        Returns: {
+          id: string;
+          invoice: string;
+          customer_id: string;
+          total_weight: number;
+          total_amount: number;
+          payment_status: string;
+          payment_method_id: string | null;
+          order_status: string;
+          notes: string | null;
+          created_at: string;
+          item_id: string | null;
+        };
+      };
+    };
   };
 }
 

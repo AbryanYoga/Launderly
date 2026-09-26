@@ -476,61 +476,104 @@ export default function ImportTransactionsPage() {
         });
       }
 
+      const CHUNK_SIZE = 5;
       let insertedCount = 0;
+      const reservedInvoices = new Set<string>();
 
-      for (let i = 0; i < validRows.length; i++) {
-        const row = validRows[i];
-        const customerId = customerMap.get(row.nomorHp.trim());
-        if (!customerId) continue;
+      const getUniqueInvoiceForBatch = async (): Promise<string> => {
+        let candidate = generateInvoice();
+        const maxRetries = 3;
 
-        const matchedService =
-          activeServices.find((s) =>
-            s.name.toLowerCase().includes(row.layanan.toLowerCase())
-          ) || activeServices[0];
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          if (!reservedInvoices.has(candidate)) {
+            const { data: existingTx, error: checkError } = await supabase
+              .from("transactions")
+              .select("id")
+              .eq("invoice", candidate)
+              .maybeSingle();
 
-        const matchedPayment =
-          activePaymentMethods.find(
-            (p) =>
-              row.metodeBayar &&
-              (p.name.toLowerCase().includes(row.metodeBayar.toLowerCase()) ||
-                row.metodeBayar.toLowerCase().includes(p.name.toLowerCase()))
-          ) || activePaymentMethods[0];
+            if (checkError) throw checkError;
 
-        const inv = generateInvoice();
-        const pStatus = row.statusBayar === "Lunas" ? "paid" : "unpaid";
+            if (!existingTx && !reservedInvoices.has(candidate)) {
+              reservedInvoices.add(candidate);
+              return candidate;
+            }
+          }
 
-        const { data: tx, error: txErr } = await supabase
-          .from("transactions")
-          .insert({
-            invoice: inv,
-            customer_id: customerId,
-            total_weight: row.berat,
-            total_amount: row.total,
-            payment_status: pStatus,
-            payment_method_id: matchedPayment?.id || null,
-            order_status: "pending",
-            notes: "Import Batch Spreadsheet",
-            created_at: new Date(row.tanggal).toISOString(),
-          })
-          .select("id")
-          .single();
-
-        if (txErr) throw txErr;
-
-        if (tx?.id && matchedService) {
-          await supabase.from("transaction_items").insert({
-            transaction_id: tx.id,
-            service_id: matchedService.id,
-            qty: row.berat,
-            subtotal: row.total,
-          });
+          if (attempt < maxRetries) {
+            candidate = generateInvoice();
+          }
         }
 
-        insertedCount++;
+        throw new Error(
+          "Nomor nota bentrok dan gagal mendapatkan nomor unik setelah 3 kali percobaan."
+        );
+      };
+
+      for (let i = 0; i < validRows.length; i += CHUNK_SIZE) {
+        const chunk = validRows.slice(i, i + CHUNK_SIZE);
+
+        await Promise.all(
+          chunk.map(async (row) => {
+            const customerId = customerMap.get(row.nomorHp.trim());
+            if (!customerId) return;
+
+            const matchedService =
+              activeServices.find((s) =>
+                s.name.toLowerCase().includes(row.layanan.toLowerCase())
+              ) || activeServices[0];
+
+            const matchedPayment =
+              activePaymentMethods.find(
+                (p) =>
+                  row.metodeBayar &&
+                  (p.name.toLowerCase().includes(row.metodeBayar.toLowerCase()) ||
+                    row.metodeBayar.toLowerCase().includes(p.name.toLowerCase()))
+              ) || activePaymentMethods[0];
+
+            const inv = await getUniqueInvoiceForBatch();
+            const pStatus = row.statusBayar === "Lunas" ? "paid" : "unpaid";
+
+            let rowDateIso = new Date().toISOString();
+            try {
+              const d = new Date(row.tanggal);
+              if (!isNaN(d.getTime())) {
+                rowDateIso = d.toISOString();
+              }
+            } catch {
+              // fallback to current date
+            }
+
+            const { error: rpcErr } = await supabase.rpc(
+              "create_transaction_with_item",
+              {
+                p_invoice: inv,
+                p_customer_id: customerId,
+                p_total_weight: row.berat,
+                p_total_amount: row.total,
+                p_payment_status: pStatus,
+                p_payment_method_id: matchedPayment?.id || null,
+                p_order_status: "pending",
+                p_notes: "Import Batch Spreadsheet",
+                p_created_at: rowDateIso,
+                p_service_id: matchedService ? matchedService.id : null,
+                p_qty: row.berat,
+                p_subtotal: row.total,
+              }
+            );
+
+            if (rpcErr) throw rpcErr;
+            insertedCount++;
+          })
+        );
+
         setSaveProgress({
-          current: insertedCount,
+          current: Math.min(insertedCount, validRows.length),
           total: validRows.length,
-          stage: `Menyimpan transaksi ${insertedCount} dari ${validRows.length}...`,
+          stage: `Menyimpan transaksi ${Math.min(
+            insertedCount,
+            validRows.length
+          )} dari ${validRows.length}...`,
         });
       }
 
