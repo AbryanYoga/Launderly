@@ -23,12 +23,39 @@ import {
   Tag,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
-import type { Service, ServiceUnit } from "@/types";
+import type { Service, ServiceUnit, Category } from "@/types";
 
 interface ToastMessage {
   type: "success" | "error";
   text: string;
 }
+
+const defaultCategories: Category[] = [
+  {
+    id: "cat-1",
+    name: "Kiloan",
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: "cat-2",
+    name: "Satuan",
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: "cat-3",
+    name: "Express",
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: "cat-4",
+    name: "Setrika",
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+];
 
 const defaultServices: Service[] = [
   {
@@ -37,6 +64,7 @@ const defaultServices: Service[] = [
     unit: "kg",
     price: 8000,
     is_active: true,
+    category_id: "cat-1",
     created_at: new Date().toISOString(),
   },
   {
@@ -45,6 +73,7 @@ const defaultServices: Service[] = [
     unit: "kg",
     price: 6000,
     is_active: true,
+    category_id: "cat-1",
     created_at: new Date().toISOString(),
   },
   {
@@ -53,6 +82,7 @@ const defaultServices: Service[] = [
     unit: "pcs",
     price: 25000,
     is_active: true,
+    category_id: "cat-2",
     created_at: new Date().toISOString(),
   },
   {
@@ -61,6 +91,7 @@ const defaultServices: Service[] = [
     unit: "kg",
     price: 4500,
     is_active: true,
+    category_id: "cat-4",
     created_at: new Date().toISOString(),
   },
 ];
@@ -74,7 +105,9 @@ function formatRupiah(val: number): string {
 }
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<"services" | "profile">("services");
+  const [activeTab, setActiveTab] = useState<"services" | "categories" | "profile">("services");
+  
+  // Services state
   const [services, setServices] = useState<Service[]>(defaultServices);
   const [isLoadingServices, setIsLoadingServices] = useState(true);
 
@@ -85,6 +118,7 @@ export default function SettingsPage() {
   const [serviceName, setServiceName] = useState("");
   const [serviceUnit, setServiceUnit] = useState<ServiceUnit>("kg");
   const [servicePrice, setServicePrice] = useState("");
+  const [serviceCategoryId, setServiceCategoryId] = useState("");
   const [serviceIsActive, setServiceIsActive] = useState(true);
   const [serviceErrors, setServiceErrors] = useState<{
     name?: string;
@@ -92,6 +126,18 @@ export default function SettingsPage() {
   }>({});
   const [isSubmittingService, setIsSubmittingService] = useState(false);
 
+  // Categories state
+  const [categories, setCategories] = useState<Category[]>(defaultCategories);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
+
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [categoryModalMode, setCategoryModalMode] = useState<"add" | "edit">("add");
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [categoryName, setCategoryName] = useState("");
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [isSubmittingCategory, setIsSubmittingCategory] = useState(false);
+
+  // Profile state
   const [settingId, setSettingId] = useState<string | null>(null);
   const [outletName, setOutletName] = useState("Laundry Insight");
   const [outletPhone, setOutletPhone] = useState("081234567890");
@@ -111,6 +157,8 @@ export default function SettingsPage() {
   const modalNameId = useId();
   const modalUnitId = useId();
   const modalPriceId = useId();
+  const modalCategoryId = useId();
+  const modalCategoryNameId = useId();
   const profileNameId = useId();
   const profilePhoneId = useId();
   const profileAddressId = useId();
@@ -121,15 +169,22 @@ export default function SettingsPage() {
 
     async function loadData() {
       try {
-        const [servicesRes, settingsRes] = await Promise.all([
+        const [servicesRes, categoriesRes, settingsRes] = await Promise.all([
           supabase
             .from("services")
+            .select("*")
+            .order("created_at", { ascending: true }),
+          supabase
+            .from("categories")
             .select("*")
             .order("created_at", { ascending: true }),
           supabase.from("settings").select("*").maybeSingle(),
         ]);
 
         if (isMounted) {
+          if (categoriesRes.data && categoriesRes.data.length > 0) {
+            setCategories(categoriesRes.data as Category[]);
+          }
           if (servicesRes.data && servicesRes.data.length > 0) {
             setServices(servicesRes.data as Service[]);
           }
@@ -146,6 +201,7 @@ export default function SettingsPage() {
       } finally {
         if (isMounted) {
           setIsLoadingServices(false);
+          setIsLoadingCategories(false);
         }
       }
     }
@@ -163,12 +219,14 @@ export default function SettingsPage() {
     return () => clearTimeout(timer);
   }, [toast]);
 
+  // Service Modal handlers
   const handleOpenAddModal = () => {
     setModalMode("add");
     setEditingId(null);
     setServiceName("");
     setServiceUnit("kg");
     setServicePrice("");
+    setServiceCategoryId("");
     setServiceIsActive(true);
     setServiceErrors({});
     setIsModalOpen(true);
@@ -180,6 +238,7 @@ export default function SettingsPage() {
     setServiceName(service.name);
     setServiceUnit(service.unit);
     setServicePrice(String(service.price));
+    setServiceCategoryId(service.category_id || "");
     setServiceIsActive(service.is_active);
     setServiceErrors({});
     setIsModalOpen(true);
@@ -234,6 +293,7 @@ export default function SettingsPage() {
     }
 
     setIsSubmittingService(true);
+    const categoryIdValue = serviceCategoryId ? serviceCategoryId : null;
 
     try {
       if (modalMode === "add") {
@@ -247,6 +307,7 @@ export default function SettingsPage() {
               unit: serviceUnit,
               price: parsedPrice,
               is_active: serviceIsActive,
+              category_id: categoryIdValue,
             })
             .select()
             .single();
@@ -264,6 +325,7 @@ export default function SettingsPage() {
           unit: serviceUnit,
           price: parsedPrice,
           is_active: serviceIsActive,
+          category_id: categoryIdValue,
           created_at: new Date().toISOString(),
         };
 
@@ -282,6 +344,7 @@ export default function SettingsPage() {
                   unit: serviceUnit,
                   price: parsedPrice,
                   is_active: serviceIsActive,
+                  category_id: categoryIdValue,
                 }
               : s
           )
@@ -295,6 +358,7 @@ export default function SettingsPage() {
               unit: serviceUnit,
               price: parsedPrice,
               is_active: serviceIsActive,
+              category_id: categoryIdValue,
             })
             .eq("id", editingId);
         }
@@ -316,6 +380,156 @@ export default function SettingsPage() {
     }
   };
 
+  // Category Modal handlers
+  const handleOpenAddCategoryModal = () => {
+    setCategoryModalMode("add");
+    setEditingCategoryId(null);
+    setCategoryName("");
+    setCategoryError(null);
+    setIsCategoryModalOpen(true);
+  };
+
+  const handleOpenEditCategoryModal = (category: Category) => {
+    setCategoryModalMode("edit");
+    setEditingCategoryId(category.id);
+    setCategoryName(category.name);
+    setCategoryError(null);
+    setIsCategoryModalOpen(true);
+  };
+
+  const handleToggleCategoryActive = async (id: string, currentStatus: boolean) => {
+    const nextStatus = !currentStatus;
+    const targetCategory = categories.find((c) => c.id === id);
+
+    if (nextStatus && targetCategory) {
+      const isDuplicate = categories.some(
+        (c) =>
+          c.id !== id &&
+          c.is_active &&
+          c.name.trim().toLowerCase() === targetCategory.name.trim().toLowerCase()
+      );
+      if (isDuplicate) {
+        setToast({
+          type: "error",
+          text: `Tidak dapat mengaktifkan. Nama kategori "${targetCategory.name}" sudah digunakan oleh kategori aktif lain.`,
+        });
+        return;
+      }
+    }
+
+    setCategories((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, is_active: nextStatus } : c))
+    );
+
+    try {
+      if (!id.startsWith("cat-")) {
+        await supabase
+          .from("categories")
+          .update({ is_active: nextStatus })
+          .eq("id", id);
+      }
+      setToast({
+        type: "success",
+        text: `Status kategori berhasil diperbarui menjadi ${
+          nextStatus ? "Aktif" : "Nonaktif"
+        }!`,
+      });
+    } catch {
+      setCategories((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, is_active: currentStatus } : c))
+      );
+      setToast({
+        type: "error",
+        text: "Gagal memperbarui status kategori.",
+      });
+    }
+  };
+
+  const handleSaveCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const trimmed = categoryName.trim();
+    if (!trimmed) {
+      setCategoryError("Nama kategori tidak boleh kosong");
+      return;
+    }
+
+    const isDuplicate = categories.some((c) => {
+      if (c.id === editingCategoryId) return false;
+      return c.is_active && c.name.trim().toLowerCase() === trimmed.toLowerCase();
+    });
+
+    if (isDuplicate) {
+      setCategoryError("Nama kategori sudah digunakan oleh kategori aktif lain");
+      return;
+    }
+
+    setIsSubmittingCategory(true);
+
+    try {
+      if (categoryModalMode === "add") {
+        let newId = `cat-${Date.now()}`;
+        try {
+          const { data, error } = await supabase
+            .from("categories")
+            .insert({
+              name: trimmed,
+              is_active: true,
+            })
+            .select()
+            .single();
+
+          if (!error && data?.id) {
+            newId = data.id;
+          }
+        } catch {
+          // Fallback local
+        }
+
+        const newCat: Category = {
+          id: newId,
+          name: trimmed,
+          is_active: true,
+          created_at: new Date().toISOString(),
+        };
+
+        setCategories((prev) => [...prev, newCat]);
+        setToast({
+          type: "success",
+          text: `Kategori "${trimmed}" berhasil ditambahkan!`,
+        });
+      } else if (editingCategoryId) {
+        setCategories((prev) =>
+          prev.map((c) =>
+            c.id === editingCategoryId ? { ...c, name: trimmed } : c
+          )
+        );
+
+        if (!editingCategoryId.startsWith("cat-")) {
+          await supabase
+            .from("categories")
+            .update({ name: trimmed })
+            .eq("id", editingCategoryId);
+        }
+
+        setToast({
+          type: "success",
+          text: `Nama kategori berhasil diperbarui menjadi "${trimmed}"!`,
+        });
+      }
+
+      setIsCategoryModalOpen(false);
+    } catch {
+      setToast({
+        type: "error",
+        text: "Terjadi kesalahan saat menyimpan kategori.",
+      });
+    } finally {
+      setIsSubmittingCategory(false);
+    }
+  };
+
+  // Profile handler
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -422,7 +636,7 @@ export default function SettingsPage() {
             <h1 className="text-xl font-bold text-dark">Pengaturan Operasional</h1>
           </div>
           <p className="text-xs text-gray-500">
-            Kelola master tarif layanan laundry dan konfigurasi profil usaha
+            Kelola master tarif layanan laundry, kategori, dan konfigurasi profil usaha
           </p>
         </div>
 
@@ -434,6 +648,17 @@ export default function SettingsPage() {
           >
             <Plus className="h-4 w-4" />
             <span>Tambah Layanan Baru</span>
+          </button>
+        )}
+
+        {activeTab === "categories" && (
+          <button
+            type="button"
+            onClick={handleOpenAddCategoryModal}
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-primary/90 transition-colors self-start sm:self-auto"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Tambah Kategori</span>
           </button>
         )}
       </div>
@@ -452,6 +677,22 @@ export default function SettingsPage() {
           <span>Tarif Layanan</span>
           <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
             {services.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("categories")}
+          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-bold transition-all ${
+            activeTab === "categories"
+              ? "border-primary text-primary"
+              : "border-transparent text-gray-500 hover:border-gray-300 hover:text-dark"
+          }`}
+        >
+          <Tag className="h-4 w-4" />
+          <span>Kategori</span>
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
+            {categories.length}
           </span>
         </button>
 
@@ -494,6 +735,7 @@ export default function SettingsPage() {
                 <tr>
                   <th className="py-3 px-4">No</th>
                   <th className="py-3 px-4">Nama Layanan</th>
+                  <th className="py-3 px-4">Kategori</th>
                   <th className="py-3 px-4">Satuan Hitung</th>
                   <th className="py-3 px-4">Tarif per Unit</th>
                   <th className="py-3 px-4">Status</th>
@@ -505,7 +747,7 @@ export default function SettingsPage() {
                 {isLoadingServices ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="py-8 text-center text-xs text-gray-400"
                     >
                       <div className="flex items-center justify-center gap-2">
@@ -517,78 +759,226 @@ export default function SettingsPage() {
                 ) : services.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="py-8 text-center text-xs text-gray-400"
                     >
                       Belum ada layanan yang ditambahkan.
                     </td>
                   </tr>
                 ) : (
-                  services.map((service, idx) => (
-                    <tr
-                      key={service.id}
-                      className="hover:bg-gray-50/70 transition-colors"
-                    >
-                      <td className="py-3.5 px-4 font-mono text-gray-400">
-                        {idx + 1}
-                      </td>
-                      <td className="py-3.5 px-4 font-bold text-dark">
-                        {service.name}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded font-mono text-[11px] font-bold uppercase bg-gray-100 text-gray-700">
-                          {service.unit}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 font-bold text-primary text-sm">
-                        {formatRupiah(service.price)}{" "}
-                        <span className="text-[11px] font-normal text-gray-400">
-                          / {service.unit}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        {service.is_active ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-success/15 text-success border border-success/30">
-                            <span className="h-1.5 w-1.5 rounded-full bg-success"></span>
-                            Aktif
+                  services.map((service, idx) => {
+                    const matchedCategory = categories.find(
+                      (c) => c.id === service.category_id
+                    );
+
+                    return (
+                      <tr
+                        key={service.id}
+                        className="hover:bg-gray-50/70 transition-colors"
+                      >
+                        <td className="py-3.5 px-4 font-mono text-gray-400">
+                          {idx + 1}
+                        </td>
+                        <td className="py-3.5 px-4 font-bold text-dark">
+                          {service.name}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          {matchedCategory ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
+                              {matchedCategory.name}
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-gray-400 italic">
+                              Tanpa Kategori
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded font-mono text-[11px] font-bold uppercase bg-gray-100 text-gray-700">
+                            {service.unit}
                           </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-500 border border-gray-200">
-                            <span className="h-1.5 w-1.5 rounded-full bg-gray-400"></span>
-                            Nonaktif
+                        </td>
+                        <td className="py-3.5 px-4 font-bold text-primary text-sm">
+                          {formatRupiah(service.price)}{" "}
+                          <span className="text-[11px] font-normal text-gray-400">
+                            / {service.unit}
                           </span>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-4 text-center">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleToggleActive(service.id, service.is_active)
-                          }
-                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                            service.is_active ? "bg-success" : "bg-gray-300"
-                          }`}
-                          aria-label={`Toggle status ${service.name}`}
-                        >
-                          <span
-                            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition duration-200 ease-in-out ${
-                              service.is_active ? "translate-x-5" : "translate-x-0"
+                        </td>
+                        <td className="py-3.5 px-4">
+                          {service.is_active ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-success/15 text-success border border-success/30">
+                              <span className="h-1.5 w-1.5 rounded-full bg-success"></span>
+                              Aktif
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-500 border border-gray-200">
+                              <span className="h-1.5 w-1.5 rounded-full bg-gray-400"></span>
+                              Nonaktif
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleToggleActive(service.id, service.is_active)
+                            }
+                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                              service.is_active ? "bg-success" : "bg-gray-300"
                             }`}
-                          />
-                        </button>
-                      </td>
-                      <td className="py-3.5 px-4 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEditModal(service)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 shadow-2xs hover:bg-gray-50 hover:text-primary transition-colors"
-                        >
-                          <Edit2 className="h-3.5 w-3.5 text-gray-500" />
-                          <span>Ubah Tarif</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                            aria-label={`Toggle status ${service.name}`}
+                          >
+                            <span
+                              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition duration-200 ease-in-out ${
+                                service.is_active ? "translate-x-5" : "translate-x-0"
+                              }`}
+                            />
+                          </button>
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditModal(service)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 shadow-2xs hover:bg-gray-50 hover:text-primary transition-colors"
+                          >
+                            <Edit2 className="h-3.5 w-3.5 text-gray-500" />
+                            <span>Ubah Tarif</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "categories" && (
+        <div className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border-b border-gray-100 gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Tag className="h-4 w-4 text-primary" />
+                <h2 className="text-sm font-bold text-dark">
+                  Daftar Master Kategori Layanan
+                </h2>
+              </div>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Kelola kategori untuk mengelompokkan jenis layanan laundry Anda
+              </p>
+            </div>
+            <span className="text-[11px] font-semibold text-gray-400 self-start sm:self-auto">
+              Total {categories.length} Kategori Terdaftar
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="border-b border-gray-100 bg-[#F8F9FA] text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                <tr>
+                  <th className="py-3 px-4">No</th>
+                  <th className="py-3 px-4">Nama Kategori</th>
+                  <th className="py-3 px-4">Layanan Terkait</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4 text-center">Toggle Aktif</th>
+                  <th className="py-3 px-4 text-center">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {isLoadingCategories ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="py-8 text-center text-xs text-gray-400"
+                    >
+                      <div className="flex items-center justify-center gap-2">
+                        <RotateCw className="h-4 w-4 animate-spin text-primary" />
+                        <span>Memuat data kategori...</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : categories.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="py-8 text-center text-xs text-gray-400"
+                    >
+                      Belum ada kategori yang ditambahkan.
+                    </td>
+                  </tr>
+                ) : (
+                  categories.map((category, idx) => {
+                    const linkedServicesCount = services.filter(
+                      (s) => s.category_id === category.id
+                    ).length;
+
+                    return (
+                      <tr
+                        key={category.id}
+                        className="hover:bg-gray-50/70 transition-colors"
+                      >
+                        <td className="py-3.5 px-4 font-mono text-gray-400">
+                          {idx + 1}
+                        </td>
+                        <td className="py-3.5 px-4 font-bold text-dark text-sm">
+                          {category.name}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-gray-100 text-gray-600">
+                            {linkedServicesCount} layanan
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          {category.is_active ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-success/15 text-success border border-success/30">
+                              <span className="h-1.5 w-1.5 rounded-full bg-success"></span>
+                              Aktif
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-500 border border-gray-200">
+                              <span className="h-1.5 w-1.5 rounded-full bg-gray-400"></span>
+                              Nonaktif
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleToggleCategoryActive(
+                                category.id,
+                                category.is_active
+                              )
+                            }
+                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                              category.is_active ? "bg-success" : "bg-gray-300"
+                            }`}
+                            aria-label={`Toggle status ${category.name}`}
+                          >
+                            <span
+                              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition duration-200 ease-in-out ${
+                                category.is_active
+                                  ? "translate-x-5"
+                                  : "translate-x-0"
+                              }`}
+                            />
+                          </button>
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditCategoryModal(category)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 shadow-2xs hover:bg-gray-50 hover:text-primary transition-colors"
+                          >
+                            <Edit2 className="h-3.5 w-3.5 text-gray-500" />
+                            <span>Edit</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -800,6 +1190,7 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* Service Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-dark/40 backdrop-blur-xs">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
@@ -857,6 +1248,30 @@ export default function SettingsPage() {
                     {serviceErrors.name}
                   </p>
                 )}
+              </div>
+
+              <div>
+                <label
+                  htmlFor={modalCategoryId}
+                  className="block text-xs font-semibold text-dark mb-1.5"
+                >
+                  Kategori Layanan <span className="text-gray-400 font-normal">(Opsional)</span>
+                </label>
+                <select
+                  id={modalCategoryId}
+                  value={serviceCategoryId}
+                  onChange={(e) => setServiceCategoryId(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-dark focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all font-semibold"
+                >
+                  <option value="">Tanpa Kategori</option>
+                  {categories
+                    .filter((c) => c.is_active)
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -949,6 +1364,97 @@ export default function SettingsPage() {
                     <>
                       <Check className="h-4 w-4" />
                       <span>Simpan Layanan</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Category Modal */}
+      {isCategoryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-dark/40 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  {categoryModalMode === "add" ? (
+                    <Plus className="h-4 w-4" />
+                  ) : (
+                    <Edit2 className="h-4 w-4" />
+                  )}
+                </div>
+                <h3 className="text-sm font-bold text-dark">
+                  {categoryModalMode === "add"
+                    ? "Tambah Kategori Baru"
+                    : "Ubah Nama Kategori"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCategoryModalOpen(false)}
+                className="text-gray-400 hover:text-dark p-1 rounded-lg"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCategory} noValidate className="space-y-4">
+              <div>
+                <label
+                  htmlFor={modalCategoryNameId}
+                  className="block text-xs font-semibold text-dark mb-1.5"
+                >
+                  Nama Kategori <span className="text-danger">*</span>
+                </label>
+                <input
+                  id={modalCategoryNameId}
+                  type="text"
+                  value={categoryName}
+                  onChange={(e) => {
+                    setCategoryName(e.target.value);
+                    if (categoryError) setCategoryError(null);
+                  }}
+                  placeholder="Contoh: Kiloan, Satuan, Express, Setrika"
+                  className={`w-full rounded-lg border px-3.5 py-2 text-xs text-dark placeholder-gray-400 focus:outline-none focus:ring-1 transition-all ${
+                    categoryError
+                      ? "border-danger focus:border-danger focus:ring-danger bg-danger/5"
+                      : "border-gray-200 focus:border-primary focus:ring-primary bg-white"
+                  }`}
+                />
+                {categoryError && (
+                  <p className="mt-1 text-[11px] text-danger flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {categoryError}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsCategoryModalOpen(false)}
+                  className="rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingCategory}
+                  className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                >
+                  {isSubmittingCategory ? (
+                    <>Menyimpan...</>
+                  ) : (
+                    <>
+                      <Check className="h-4 w-4" />
+                      <span>
+                        {categoryModalMode === "add"
+                          ? "Simpan Kategori"
+                          : "Simpan Perubahan"}
+                      </span>
                     </>
                   )}
                 </button>
