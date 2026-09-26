@@ -20,11 +20,12 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase/client";
-import type { Service, PaymentMethod } from "@/types";
+import type { Service, PaymentMethod, Category } from "@/types";
 
 export interface ParsedRow {
   namaPelanggan: string;
   nomorHp: string;
+  kategori: string;
   layanan: string;
   berat: number;
   total: number;
@@ -137,52 +138,34 @@ export default function ImportTransactionsPage() {
   };
 
   const handleDownloadTemplate = () => {
-    const templateData = [
-      {
-        "Nama Pelanggan": "Budi Santoso",
-        "Nomor HP": "081234567891",
-        "Layanan": "Cuci Komplit",
-        "Berat": 3.5,
-        "Total": 28000,
-        "Tanggal": new Date().toISOString().split("T")[0],
-        "Status Bayar": "Lunas",
-        "Metode Pembayaran": "Cash",
-      },
-      {
-        "Nama Pelanggan": "Siti Rahma",
-        "Nomor HP": "085678901234",
-        "Layanan": "Cuci Kering",
-        "Berat": 2,
-        "Total": 12000,
-        "Tanggal": new Date().toISOString().split("T")[0],
-        "Status Bayar": "Belum Lunas",
-        "Metode Pembayaran": "QRIS",
-      },
-      {
-        "Nama Pelanggan": "Ahmad Dani",
-        "Nomor HP": "081987654321",
-        "Layanan": "Bed Cover",
-        "Berat": 1,
-        "Total": 25000,
-        "Tanggal": new Date().toISOString().split("T")[0],
-        "Status Bayar": "Lunas",
-        "Metode Pembayaran": "Transfer Bank",
-      },
+    const headers = [
+      [
+        "Nama Pelanggan",
+        "Nomor HP",
+        "Kategori",
+        "Layanan",
+        "Berat",
+        "Total",
+        "Tanggal",
+        "Status Bayar",
+        "Metode Pembayaran",
+      ],
     ];
 
-    const worksheet = XLSX.utils.json_to_sheet(templateData);
+    const worksheet = XLSX.utils.aoa_to_sheet(headers);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Template Transaksi");
 
     worksheet["!cols"] = [
-      { wch: 22 },
-      { wch: 18 },
-      { wch: 16 },
-      { wch: 10 },
-      { wch: 14 },
-      { wch: 14 },
-      { wch: 16 },
-      { wch: 20 },
+      { wch: 22 }, // Nama Pelanggan
+      { wch: 18 }, // Nomor HP
+      { wch: 16 }, // Kategori
+      { wch: 18 }, // Layanan
+      { wch: 10 }, // Berat
+      { wch: 14 }, // Total
+      { wch: 14 }, // Tanggal
+      { wch: 16 }, // Status Bayar
+      { wch: 20 }, // Metode Pembayaran
     ];
 
     XLSX.writeFile(workbook, "template_transaksi_laundry.xlsx");
@@ -253,11 +236,19 @@ export default function ImportTransactionsPage() {
             "whatsapp",
             "no. hp",
           ]);
+          const kategoriRaw = findKey([
+            "kategori",
+            "category",
+            ...(findKey(["layanan", "nama layanan", "paket", "service"])
+              ? ["jenis layanan"]
+              : []),
+          ]);
           const layanan = findKey([
             "layanan",
+            "nama layanan",
             "paket",
             "service",
-            "jenis layanan",
+            ...(!findKey(["kategori", "category"]) ? ["jenis layanan"] : []),
           ]);
           const beratRaw = findKey(["berat", "qty", "kuantitas", "weight"]);
           const totalRaw = findKey(["total", "biaya", "harga", "grand total"]);
@@ -313,6 +304,7 @@ export default function ImportTransactionsPage() {
           return {
             namaPelanggan: nama,
             nomorHp: hp,
+            kategori: kategoriRaw,
             layanan: layanan || "-",
             berat,
             total,
@@ -399,14 +391,16 @@ export default function ImportTransactionsPage() {
     try {
       let activeServices: Service[] = [];
       let activePaymentMethods: PaymentMethod[] = [];
+      let activeCategories: Category[] = [];
 
-      const [servicesRes, paymentsRes] = await Promise.all([
+      const [servicesRes, paymentsRes, categoriesRes] = await Promise.all([
         supabase.from("services").select("*").eq("is_active", true),
         supabase
           .from("payment_methods")
           .select("*")
           .eq("is_active", true)
           .order("created_at", { ascending: true }),
+        supabase.from("categories").select("*").eq("is_active", true),
       ]);
 
       if (servicesRes.data && servicesRes.data.length > 0) {
@@ -430,6 +424,10 @@ export default function ImportTransactionsPage() {
         activePaymentMethods = paymentMethods;
       } else {
         activePaymentMethods = defaultPaymentMethods;
+      }
+
+      if (categoriesRes.data && categoriesRes.data.length > 0) {
+        activeCategories = categoriesRes.data as Category[];
       }
 
       setSaveProgress({
@@ -518,10 +516,39 @@ export default function ImportTransactionsPage() {
             const customerId = customerMap.get(row.nomorHp.trim());
             if (!customerId) return;
 
-            const matchedService =
-              activeServices.find((s) =>
-                s.name.toLowerCase().includes(row.layanan.toLowerCase())
-              ) || activeServices[0];
+            // Match service with optional category prioritization
+            let matchedService: Service | undefined;
+
+            if (row.kategori && row.kategori.trim()) {
+              const normKategori = row.kategori.trim().toLowerCase();
+              const matchedCategory = activeCategories.find(
+                (c) =>
+                  c.name.toLowerCase().includes(normKategori) ||
+                  normKategori.includes(c.name.toLowerCase())
+              );
+
+              if (matchedCategory) {
+                const servicesInCategory = activeServices.filter(
+                  (s) => s.category_id === matchedCategory.id
+                );
+                matchedService = servicesInCategory.find(
+                  (s) =>
+                    s.name.toLowerCase().includes(row.layanan.toLowerCase()) ||
+                    row.layanan.toLowerCase().includes(s.name.toLowerCase())
+                );
+              }
+            }
+
+            // Fallback to matching by service name across all services
+            if (!matchedService) {
+              matchedService = activeServices.find(
+                (s) =>
+                  s.name.toLowerCase().includes(row.layanan.toLowerCase()) ||
+                  row.layanan.toLowerCase().includes(s.name.toLowerCase())
+              );
+            }
+
+            const finalService = matchedService || activeServices[0];
 
             const matchedPayment =
               activePaymentMethods.find(
@@ -556,7 +583,7 @@ export default function ImportTransactionsPage() {
                 p_order_status: "pending",
                 p_notes: "Import Batch Spreadsheet",
                 p_created_at: rowDateIso,
-                p_service_id: matchedService ? matchedService.id : null,
+                p_service_id: finalService ? finalService.id : null,
                 p_qty: row.berat,
                 p_subtotal: row.total,
               }
@@ -876,12 +903,13 @@ export default function ImportTransactionsPage() {
           </div>
 
           <div className="overflow-x-auto min-w-full max-h-[480px]">
-            <table className="w-full text-left text-xs min-w-[900px]">
+            <table className="w-full text-left text-xs min-w-[1000px]">
               <thead className="sticky top-0 z-10 border-b border-gray-200 bg-gray-50 text-[11px] font-bold text-dark uppercase shadow-xs">
                 <tr>
                   <th className="py-3 px-4">No</th>
                   <th className="py-3 px-4">Nama Pelanggan</th>
                   <th className="py-3 px-4">Nomor HP</th>
+                  <th className="py-3 px-4">Kategori</th>
                   <th className="py-3 px-4">Layanan</th>
                   <th className="py-3 px-4">Berat/Qty</th>
                   <th className="py-3 px-4">Total</th>
@@ -925,6 +953,15 @@ export default function ImportTransactionsPage() {
                         </span>
                       ) : (
                         <span className="text-gray-600">{row.nomorHp}</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4">
+                      {row.kategori ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-primary/10 text-primary border border-primary/20">
+                          {row.kategori}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-[11px]">-</span>
                       )}
                     </td>
                     <td className="py-3 px-4">
