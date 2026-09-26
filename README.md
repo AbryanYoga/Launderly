@@ -1,36 +1,76 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Launderly — Laundry Operations & Business Analytics Platform
 
-## Getting Started
+Launderly adalah platform manajemen operasional dan analitik bisnis laundry modern berbasis web. Dibangun dengan estetika antarmuka Skote Theme palette (Dark Navy, Slate, dan Sky Blue), sistem ini dirancang untuk mempercepat pencatatan transaksi kasir harian, memudahkan migrasi/batch import data dari Excel, memantau metrik performa utama (KPI), serta memberikan analisis tren bisnis yang mendalam.
 
-First, run the development server:
+---
 
+## Fitur Utama
+
+- **Dashboard Real-Time**: Pemantauan KPI harian (total omzet, volume cucian, antrean aktif, pelanggan baru) dengan tabel transaksi terbaru dan *inline status updater*.
+- **Pencatatan Transaksi Cepat**: Formulir pemesanan walk-in dengan pengelompokan layanan per kategori, pemilihan metode pembayaran, auto-lookup pelanggan, dan pratinjau nota receipt siap cetak.
+- **Batch Import Excel**: Unggah spreadsheet (`.xlsx`, `.xls`, `.csv`) dengan validasi otomatis per baris, pencocokan layanan & metode pembayaran cerdas, serta penyimpanan batch ke database.
+- **Analitik & Business Intelligence**: Visualisasi tren omzet harian, rasio pelanggan berulang, jam sibuk (peak hours), serta grafik komposisi (per layanan, per kategori, dan metode pembayaran).
+- **Master Data & Pengaturan**: Manajemen tarif layanan, master kategori cucian, master metode pembayaran, serta profil usaha untuk bukti bayar.
+- **Keamanan & Keandalan**: Row Level Security (RLS) di semua tabel PostgreSQL, penyimpanan transaksi atomik via RPC function, dan penanganan collision nomor nota otomatis.
+- **Polesan UX & Responsif**: Tampilan mobile-friendly dengan collapsible drawer sidebar, loading skeleton teranimasi, pemisahan jelas antara mode demo dan data asli, serta unified toast notifications.
+
+---
+
+## Tech Stack
+
+- **Framework**: [Next.js](https://nextjs.org/) (App Router, Turbopack, TypeScript)
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/) (Skote Palette `#2A3042`, `#F8F9FA`, `#0284C7`)
+- **Database & Auth**: [Supabase](https://supabase.com/) (PostgreSQL dengan RLS & Stored Procedures)
+- **Visualisasi Data**: [Recharts](https://recharts.org/)
+- **Spreadsheet Parser**: [SheetJS (xlsx)](https://docs.sheetjs.com/)
+- **Icons**: [Lucide React](https://lucide.dev/)
+
+---
+
+## Panduan Instalasi & Menjalankan Project
+
+### 1. Prasyarat
+- Node.js versi 18.18 atau lebih baru
+- Akun atau project di [Supabase](https://supabase.com)
+
+### 2. Kloning & Instal Dependensi
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/AbryanYoga/Launderly.git
+cd Launderly
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 3. Konfigurasi Environment Variables
+Salin file `.env.example` menjadi `.env.local`:
+```bash
+cp .env.example .env.local
+```
+Lalu buka file `.env.local` dan masukkan kredensial Supabase project Anda:
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 4. Menjalankan Migrasi Database Supabase
+Jalankan file migrasi SQL secara berurutan pada menu **SQL Editor** di dashboard Supabase (atau gunakan Supabase CLI):
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **`supabase/migrations/01_initial_schema.sql`**  
+   Membuat skema tabel dasar: `services`, `customers`, `transactions`, `transaction_items`, dan `settings`.
+2. **`supabase/migrations/02_categories_payment_methods.sql`**  
+   Membuat tabel `categories` dan `payment_methods`, serta menambahkan relasi foreign key pada `services.category_id` dan `transactions.payment_method_id`.
+3. **`supabase/migrations/03_rls_policies.sql`**  
+   Mengaktifkan Row Level Security (RLS) di seluruh tabel dengan policy publik (anon `SELECT`, `INSERT`, `UPDATE`), serta membuat fungsi atomik PostgreSQL `create_transaction_with_item`.
 
-## Learn More
+### 5. Menjalankan Server Development
+Jalankan server pengembangan lokal:
+```bash
+npm run dev
+```
+Akses aplikasi melalui browser di [http://localhost:3000](http://localhost:3000).
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 6. Build untuk Produksi
+Untuk memvalidasi dan membuat build produksi:
+```bash
+npm run build
+npm run start
+```
