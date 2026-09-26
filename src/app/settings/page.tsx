@@ -21,9 +21,10 @@ import {
   Sparkles,
   Save,
   Tag,
+  CreditCard,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
-import type { Service, ServiceUnit, Category } from "@/types";
+import type { Service, ServiceUnit, Category, PaymentMethod } from "@/types";
 
 interface ToastMessage {
   type: "success" | "error";
@@ -52,6 +53,33 @@ const defaultCategories: Category[] = [
   {
     id: "cat-4",
     name: "Setrika",
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+];
+
+const defaultPaymentMethods: PaymentMethod[] = [
+  {
+    id: "pm-1",
+    name: "Cash",
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: "pm-2",
+    name: "Transfer Bank",
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: "pm-3",
+    name: "QRIS",
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: "pm-4",
+    name: "E-Wallet",
     is_active: true,
     created_at: new Date().toISOString(),
   },
@@ -105,8 +133,10 @@ function formatRupiah(val: number): string {
 }
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<"services" | "categories" | "profile">("services");
-  
+  const [activeTab, setActiveTab] = useState<
+    "services" | "categories" | "payments" | "profile"
+  >("services");
+
   // Services state
   const [services, setServices] = useState<Service[]>(defaultServices);
   const [isLoadingServices, setIsLoadingServices] = useState(true);
@@ -131,11 +161,32 @@ export default function SettingsPage() {
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
 
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
-  const [categoryModalMode, setCategoryModalMode] = useState<"add" | "edit">("add");
-  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [categoryModalMode, setCategoryModalMode] = useState<"add" | "edit">(
+    "add"
+  );
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(
+    null
+  );
   const [categoryName, setCategoryName] = useState("");
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [isSubmittingCategory, setIsSubmittingCategory] = useState(false);
+
+  // Payment Methods state
+  const [paymentMethods, setPaymentMethods] =
+    useState<PaymentMethod[]>(defaultPaymentMethods);
+  const [isLoadingPaymentMethods, setIsLoadingPaymentMethods] = useState(true);
+
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentModalMode, setPaymentModalMode] = useState<"add" | "edit">(
+    "add"
+  );
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [paymentMethodName, setPaymentMethodName] = useState("");
+  const [paymentMethodError, setPaymentMethodError] = useState<string | null>(
+    null
+  );
+  const [isSubmittingPaymentMethod, setIsSubmittingPaymentMethod] =
+    useState(false);
 
   // Profile state
   const [settingId, setSettingId] = useState<string | null>(null);
@@ -159,6 +210,7 @@ export default function SettingsPage() {
   const modalPriceId = useId();
   const modalCategoryId = useId();
   const modalCategoryNameId = useId();
+  const modalPaymentMethodNameId = useId();
   const profileNameId = useId();
   const profilePhoneId = useId();
   const profileAddressId = useId();
@@ -169,21 +221,29 @@ export default function SettingsPage() {
 
     async function loadData() {
       try {
-        const [servicesRes, categoriesRes, settingsRes] = await Promise.all([
-          supabase
-            .from("services")
-            .select("*")
-            .order("created_at", { ascending: true }),
-          supabase
-            .from("categories")
-            .select("*")
-            .order("created_at", { ascending: true }),
-          supabase.from("settings").select("*").maybeSingle(),
-        ]);
+        const [servicesRes, categoriesRes, paymentsRes, settingsRes] =
+          await Promise.all([
+            supabase
+              .from("services")
+              .select("*")
+              .order("created_at", { ascending: true }),
+            supabase
+              .from("categories")
+              .select("*")
+              .order("created_at", { ascending: true }),
+            supabase
+              .from("payment_methods")
+              .select("*")
+              .order("created_at", { ascending: true }),
+            supabase.from("settings").select("*").maybeSingle(),
+          ]);
 
         if (isMounted) {
           if (categoriesRes.data && categoriesRes.data.length > 0) {
             setCategories(categoriesRes.data as Category[]);
+          }
+          if (paymentsRes.data && paymentsRes.data.length > 0) {
+            setPaymentMethods(paymentsRes.data as PaymentMethod[]);
           }
           if (servicesRes.data && servicesRes.data.length > 0) {
             setServices(servicesRes.data as Service[]);
@@ -202,6 +262,7 @@ export default function SettingsPage() {
         if (isMounted) {
           setIsLoadingServices(false);
           setIsLoadingCategories(false);
+          setIsLoadingPaymentMethods(false);
         }
       }
     }
@@ -397,7 +458,10 @@ export default function SettingsPage() {
     setIsCategoryModalOpen(true);
   };
 
-  const handleToggleCategoryActive = async (id: string, currentStatus: boolean) => {
+  const handleToggleCategoryActive = async (
+    id: string,
+    currentStatus: boolean
+  ) => {
     const nextStatus = !currentStatus;
     const targetCategory = categories.find((c) => c.id === id);
 
@@ -529,6 +593,162 @@ export default function SettingsPage() {
     }
   };
 
+  // Payment Method Modal handlers
+  const handleOpenAddPaymentModal = () => {
+    setPaymentModalMode("add");
+    setEditingPaymentId(null);
+    setPaymentMethodName("");
+    setPaymentMethodError(null);
+    setIsPaymentModalOpen(true);
+  };
+
+  const handleOpenEditPaymentModal = (pm: PaymentMethod) => {
+    setPaymentModalMode("edit");
+    setEditingPaymentId(pm.id);
+    setPaymentMethodName(pm.name);
+    setPaymentMethodError(null);
+    setIsPaymentModalOpen(true);
+  };
+
+  const handleTogglePaymentActive = async (
+    id: string,
+    currentStatus: boolean
+  ) => {
+    const nextStatus = !currentStatus;
+    const targetPayment = paymentMethods.find((p) => p.id === id);
+
+    if (nextStatus && targetPayment) {
+      const isDuplicate = paymentMethods.some(
+        (p) =>
+          p.id !== id &&
+          p.is_active &&
+          p.name.trim().toLowerCase() === targetPayment.name.trim().toLowerCase()
+      );
+      if (isDuplicate) {
+        setToast({
+          type: "error",
+          text: `Tidak dapat mengaktifkan. Nama metode "${targetPayment.name}" sudah digunakan metode aktif lain.`,
+        });
+        return;
+      }
+    }
+
+    setPaymentMethods((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, is_active: nextStatus } : p))
+    );
+
+    try {
+      if (!id.startsWith("pm-")) {
+        await supabase
+          .from("payment_methods")
+          .update({ is_active: nextStatus })
+          .eq("id", id);
+      }
+      setToast({
+        type: "success",
+        text: `Status metode pembayaran berhasil diperbarui menjadi ${
+          nextStatus ? "Aktif" : "Nonaktif"
+        }!`,
+      });
+    } catch {
+      setPaymentMethods((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, is_active: currentStatus } : p))
+      );
+      setToast({
+        type: "error",
+        text: "Gagal memperbarui status metode pembayaran.",
+      });
+    }
+  };
+
+  const handleSavePaymentMethod = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const trimmed = paymentMethodName.trim();
+    if (!trimmed) {
+      setPaymentMethodError("Nama metode pembayaran tidak boleh kosong");
+      return;
+    }
+
+    const isDuplicate = paymentMethods.some((p) => {
+      if (p.id === editingPaymentId) return false;
+      return (
+        p.is_active && p.name.trim().toLowerCase() === trimmed.toLowerCase()
+      );
+    });
+
+    if (isDuplicate) {
+      setPaymentMethodError(
+        "Nama metode pembayaran sudah digunakan oleh metode aktif lain"
+      );
+      return;
+    }
+
+    setIsSubmittingPaymentMethod(true);
+
+    try {
+      if (paymentModalMode === "add") {
+        let newId = `pm-${Date.now()}`;
+        try {
+          const { data, error } = await supabase
+            .from("payment_methods")
+            .insert({
+              name: trimmed,
+              is_active: true,
+            })
+            .select()
+            .single();
+
+          if (!error && data?.id) {
+            newId = data.id;
+          }
+        } catch {
+          // Fallback local
+        }
+
+        const newPaymentObj: PaymentMethod = {
+          id: newId,
+          name: trimmed,
+          is_active: true,
+          created_at: new Date().toISOString(),
+        };
+
+        setPaymentMethods((prev) => [...prev, newPaymentObj]);
+        setToast({
+          type: "success",
+          text: `Metode pembayaran "${trimmed}" berhasil ditambahkan!`,
+        });
+      } else if (editingPaymentId) {
+        setPaymentMethods((prev) =>
+          prev.map((p) =>
+            p.id === editingPaymentId ? { ...p, name: trimmed } : p
+          )
+        );
+
+        if (!editingPaymentId.startsWith("pm-")) {
+          await supabase
+            .from("payment_methods")
+            .update({ name: trimmed })
+            .eq("id", editingPaymentId);
+        }
+
+        setToast({
+          type: "success",
+          text: `Nama metode pembayaran berhasil diperbarui menjadi "${trimmed}"!`,
+        });
+      }
+
+      setIsPaymentModalOpen(false);
+    } catch {
+      setToast({
+        type: "error",
+        text: "Terjadi kesalahan saat menyimpan metode pembayaran.",
+      });
+    } finally {
+      setIsSubmittingPaymentMethod(false);
+    }
+  };
+
   // Profile handler
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -633,10 +853,13 @@ export default function SettingsPage() {
             >
               <ArrowLeft className="h-4 w-4" />
             </Link>
-            <h1 className="text-xl font-bold text-dark">Pengaturan Operasional</h1>
+            <h1 className="text-xl font-bold text-dark">
+              Pengaturan Operasional
+            </h1>
           </div>
           <p className="text-xs text-gray-500">
-            Kelola master tarif layanan laundry, kategori, dan konfigurasi profil usaha
+            Kelola master tarif layanan, kategori, metode pembayaran, dan profil
+            usaha
           </p>
         </div>
 
@@ -661,13 +884,24 @@ export default function SettingsPage() {
             <span>Tambah Kategori</span>
           </button>
         )}
+
+        {activeTab === "payments" && (
+          <button
+            type="button"
+            onClick={handleOpenAddPaymentModal}
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-primary/90 transition-colors self-start sm:self-auto"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Tambah Metode Pembayaran</span>
+          </button>
+        )}
       </div>
 
-      <div className="flex items-center gap-2 border-b border-gray-200">
+      <div className="flex items-center gap-2 border-b border-gray-200 overflow-x-auto">
         <button
           type="button"
           onClick={() => setActiveTab("services")}
-          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-bold transition-all ${
+          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-bold transition-all whitespace-nowrap ${
             activeTab === "services"
               ? "border-primary text-primary"
               : "border-transparent text-gray-500 hover:border-gray-300 hover:text-dark"
@@ -683,7 +917,7 @@ export default function SettingsPage() {
         <button
           type="button"
           onClick={() => setActiveTab("categories")}
-          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-bold transition-all ${
+          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-bold transition-all whitespace-nowrap ${
             activeTab === "categories"
               ? "border-primary text-primary"
               : "border-transparent text-gray-500 hover:border-gray-300 hover:text-dark"
@@ -698,8 +932,24 @@ export default function SettingsPage() {
 
         <button
           type="button"
+          onClick={() => setActiveTab("payments")}
+          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-bold transition-all whitespace-nowrap ${
+            activeTab === "payments"
+              ? "border-primary text-primary"
+              : "border-transparent text-gray-500 hover:border-gray-300 hover:text-dark"
+          }`}
+        >
+          <CreditCard className="h-4 w-4" />
+          <span>Metode Pembayaran</span>
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
+            {paymentMethods.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveTab("profile")}
-          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-bold transition-all ${
+          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-bold transition-all whitespace-nowrap ${
             activeTab === "profile"
               ? "border-primary text-primary"
               : "border-transparent text-gray-500 hover:border-gray-300 hover:text-dark"
@@ -710,6 +960,7 @@ export default function SettingsPage() {
         </button>
       </div>
 
+      {/* Services Tab */}
       {activeTab === "services" && (
         <div className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border-b border-gray-100 gap-3">
@@ -721,7 +972,8 @@ export default function SettingsPage() {
                 </h2>
               </div>
               <p className="text-xs text-gray-400 mt-0.5">
-                Tarif aktif akan otomatis muncul sebagai opsi saat pencatatan transaksi walk-in
+                Tarif aktif akan otomatis muncul sebagai opsi saat pencatatan
+                transaksi walk-in
               </p>
             </div>
             <span className="text-[11px] font-semibold text-gray-400 self-start sm:self-auto">
@@ -830,7 +1082,9 @@ export default function SettingsPage() {
                           >
                             <span
                               className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition duration-200 ease-in-out ${
-                                service.is_active ? "translate-x-5" : "translate-x-0"
+                                service.is_active
+                                  ? "translate-x-5"
+                                  : "translate-x-0"
                               }`}
                             />
                           </button>
@@ -855,6 +1109,7 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* Categories Tab */}
       {activeTab === "categories" && (
         <div className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border-b border-gray-100 gap-3">
@@ -986,6 +1241,127 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* Payment Methods Tab */}
+      {activeTab === "payments" && (
+        <div className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border-b border-gray-100 gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-4 w-4 text-primary" />
+                <h2 className="text-sm font-bold text-dark">
+                  Daftar Master Metode Pembayaran
+                </h2>
+              </div>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Kelola channel pembayaran transaksi pelanggan (Cash, Transfer, QRIS, dll)
+              </p>
+            </div>
+            <span className="text-[11px] font-semibold text-gray-400 self-start sm:self-auto">
+              Total {paymentMethods.length} Metode Terdaftar
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="border-b border-gray-100 bg-[#F8F9FA] text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                <tr>
+                  <th className="py-3 px-4">No</th>
+                  <th className="py-3 px-4">Nama Metode Pembayaran</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4 text-center">Toggle Aktif</th>
+                  <th className="py-3 px-4 text-center">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {isLoadingPaymentMethods ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="py-8 text-center text-xs text-gray-400"
+                    >
+                      <div className="flex items-center justify-center gap-2">
+                        <RotateCw className="h-4 w-4 animate-spin text-primary" />
+                        <span>Memuat data metode pembayaran...</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : paymentMethods.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="py-8 text-center text-xs text-gray-400"
+                    >
+                      Belum ada metode pembayaran yang ditambahkan.
+                    </td>
+                  </tr>
+                ) : (
+                  paymentMethods.map((payment, idx) => (
+                    <tr
+                      key={payment.id}
+                      className="hover:bg-gray-50/70 transition-colors"
+                    >
+                      <td className="py-3.5 px-4 font-mono text-gray-400">
+                        {idx + 1}
+                      </td>
+                      <td className="py-3.5 px-4 font-bold text-dark text-sm">
+                        {payment.name}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        {payment.is_active ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-success/15 text-success border border-success/30">
+                            <span className="h-1.5 w-1.5 rounded-full bg-success"></span>
+                            Aktif
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-500 border border-gray-200">
+                            <span className="h-1.5 w-1.5 rounded-full bg-gray-400"></span>
+                            Nonaktif
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4 text-center">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleTogglePaymentActive(
+                              payment.id,
+                              payment.is_active
+                            )
+                          }
+                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            payment.is_active ? "bg-success" : "bg-gray-300"
+                          }`}
+                          aria-label={`Toggle status ${payment.name}`}
+                        >
+                          <span
+                            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition duration-200 ease-in-out ${
+                              payment.is_active
+                                ? "translate-x-5"
+                                : "translate-x-0"
+                            }`}
+                          />
+                        </button>
+                      </td>
+                      <td className="py-3.5 px-4 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditPaymentModal(payment)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 shadow-2xs hover:bg-gray-50 hover:text-primary transition-colors"
+                        >
+                          <Edit2 className="h-3.5 w-3.5 text-gray-500" />
+                          <span>Edit</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Profile Tab */}
       {activeTab === "profile" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           <div className="lg:col-span-7 rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
@@ -1182,7 +1558,9 @@ export default function SettingsPage() {
               <div className="flex items-start gap-2.5">
                 <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
                 <p className="text-xs text-gray-600 leading-relaxed">
-                  Perubahan profil dan catatan kaki nota akan otomatis disesuaikan di seluruh fitur pencetakan nota fisik dan ringkasan transaksi.
+                  Perubahan profil dan catatan kaki nota akan otomatis
+                  disesuaikan di seluruh fitur pencetakan nota fisik dan ringkasan
+                  transaksi.
                 </p>
               </div>
             </div>
@@ -1255,7 +1633,8 @@ export default function SettingsPage() {
                   htmlFor={modalCategoryId}
                   className="block text-xs font-semibold text-dark mb-1.5"
                 >
-                  Kategori Layanan <span className="text-gray-400 font-normal">(Opsional)</span>
+                  Kategori Layanan{" "}
+                  <span className="text-gray-400 font-normal">(Opsional)</span>
                 </label>
                 <select
                   id={modalCategoryId}
@@ -1311,7 +1690,10 @@ export default function SettingsPage() {
                     onChange={(e) => {
                       setServicePrice(e.target.value);
                       if (serviceErrors.price)
-                        setServiceErrors({ ...serviceErrors, price: undefined });
+                        setServiceErrors({
+                          ...serviceErrors,
+                          price: undefined,
+                        });
                     }}
                     placeholder="Contoh: 8000"
                     className={`w-full rounded-lg border px-3.5 py-2 text-xs text-dark placeholder-gray-400 focus:outline-none focus:ring-1 transition-all ${
@@ -1453,6 +1835,101 @@ export default function SettingsPage() {
                       <span>
                         {categoryModalMode === "add"
                           ? "Simpan Kategori"
+                          : "Simpan Perubahan"}
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Method Modal */}
+      {isPaymentModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-dark/40 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  {paymentModalMode === "add" ? (
+                    <Plus className="h-4 w-4" />
+                  ) : (
+                    <Edit2 className="h-4 w-4" />
+                  )}
+                </div>
+                <h3 className="text-sm font-bold text-dark">
+                  {paymentModalMode === "add"
+                    ? "Tambah Metode Pembayaran Baru"
+                    : "Ubah Nama Metode Pembayaran"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPaymentModalOpen(false)}
+                className="text-gray-400 hover:text-dark p-1 rounded-lg"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleSavePaymentMethod}
+              noValidate
+              className="space-y-4"
+            >
+              <div>
+                <label
+                  htmlFor={modalPaymentMethodNameId}
+                  className="block text-xs font-semibold text-dark mb-1.5"
+                >
+                  Nama Metode Pembayaran <span className="text-danger">*</span>
+                </label>
+                <input
+                  id={modalPaymentMethodNameId}
+                  type="text"
+                  value={paymentMethodName}
+                  onChange={(e) => {
+                    setPaymentMethodName(e.target.value);
+                    if (paymentMethodError) setPaymentMethodError(null);
+                  }}
+                  placeholder="Contoh: Cash, Transfer BCA, QRIS BCA, GoPay"
+                  className={`w-full rounded-lg border px-3.5 py-2 text-xs text-dark placeholder-gray-400 focus:outline-none focus:ring-1 transition-all ${
+                    paymentMethodError
+                      ? "border-danger focus:border-danger focus:ring-danger bg-danger/5"
+                      : "border-gray-200 focus:border-primary focus:ring-primary bg-white"
+                  }`}
+                />
+                {paymentMethodError && (
+                  <p className="mt-1 text-[11px] text-danger flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {paymentMethodError}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsPaymentModalOpen(false)}
+                  className="rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingPaymentMethod}
+                  className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                >
+                  {isSubmittingPaymentMethod ? (
+                    <>Menyimpan...</>
+                  ) : (
+                    <>
+                      <Check className="h-4 w-4" />
+                      <span>
+                        {paymentModalMode === "add"
+                          ? "Simpan Metode"
                           : "Simpan Perubahan"}
                       </span>
                     </>
