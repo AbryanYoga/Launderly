@@ -23,11 +23,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import type { Service, PaymentStatus, Category, PaymentMethod } from "@/types";
-
-interface ToastMessage {
-  type: "success" | "error";
-  text: string;
-}
+import { Toast, type ToastMessage } from "@/components/Toast";
 
 const defaultCategories: Category[] = [
   {
@@ -404,33 +400,7 @@ export default function NewTransactionPage() {
 
   return (
     <div className="space-y-6">
-      {toast && (
-        <div
-          className={`fixed top-4 right-4 z-50 flex items-center gap-3 rounded-xl border p-4 shadow-lg transition-all no-print ${
-            toast.type === "success"
-              ? "border-success/30 bg-white text-dark shadow-success/10"
-              : "border-danger/30 bg-white text-dark shadow-danger/10"
-          }`}
-        >
-          {toast.type === "success" ? (
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-success/10 text-success">
-              <CheckCircle2 className="h-5 w-5" />
-            </div>
-          ) : (
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-danger/10 text-danger">
-              <AlertTriangle className="h-5 w-5" />
-            </div>
-          )}
-          <span className="text-xs font-semibold">{toast.text}</span>
-          <button
-            type="button"
-            onClick={() => setToast(null)}
-            className="text-gray-400 hover:text-dark ml-2"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      )}
+      <Toast toast={toast} onClose={() => setToast(null)} />
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print">
         <div>

@@ -16,6 +16,8 @@ import {
   Calendar,
   AlertCircle,
   ArrowRight,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import type { OrderStatus } from "@/types";
@@ -86,6 +88,13 @@ const sampleTransactions: RecentTransaction[] = [
   },
 ];
 
+const sampleMetrics: MetricsData = {
+  totalRevenue: 121000,
+  totalVolume: 3.0,
+  activeOrders: 3,
+  newCustomers: 4,
+};
+
 function formatRupiah(amount: number): string {
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
@@ -114,8 +123,11 @@ export default function Home() {
     activeOrders: 0,
     newCustomers: 0,
   });
-  const [recentTransactions, setRecentTransactions] =
-    useState<RecentTransaction[]>([]);
+  const [recentTransactions, setRecentTransactions] = useState<
+    RecentTransaction[]
+  >([]);
+  const [hasRealData, setHasRealData] = useState<boolean>(false);
+  const [showDemoData, setShowDemoData] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
@@ -154,36 +166,28 @@ export default function Home() {
       .from("customers")
       .select("id, created_at");
 
+    const hasReal = !!(allTransactions && allTransactions.length > 0);
+
     let totalRevenue = 0;
     let totalVolume = 0;
     let activeOrders = 0;
 
-    const sourceTx =
-      allTransactions && allTransactions.length > 0
-        ? allTransactions
-        : sampleTransactions.map((s) => ({
-            total_amount: s.totalAmount,
-            total_weight: s.totalWeight,
-            order_status: s.orderStatus,
-            created_at: s.createdAt,
-          }));
-
-    sourceTx.forEach((tx) => {
-      totalRevenue += Number(tx.total_amount) || 0;
-      if (tx.order_status === "completed") {
-        totalVolume += Number(tx.total_weight) || 0;
-      } else {
-        activeOrders += 1;
-      }
-    });
+    if (allTransactions && allTransactions.length > 0) {
+      allTransactions.forEach((tx) => {
+        totalRevenue += Number(tx.total_amount) || 0;
+        if (tx.order_status === "completed") {
+          totalVolume += Number(tx.total_weight) || 0;
+        } else {
+          activeOrders += 1;
+        }
+      });
+    }
 
     let newCustomers = 0;
     if (customers && customers.length > 0) {
       newCustomers = customers.filter(
         (c) => new Date(c.created_at) >= new Date(firstDayOfMonth)
       ).length;
-    } else {
-      newCustomers = 4;
     }
 
     let mappedTx: RecentTransaction[] = [];
@@ -216,11 +220,10 @@ export default function Home() {
           createdAt: t.created_at,
         };
       });
-    } else {
-      mappedTx = sampleTransactions;
     }
 
     return {
+      hasReal,
       metricsData: {
         totalRevenue,
         totalVolume,
@@ -236,14 +239,17 @@ export default function Home() {
 
     async function init() {
       try {
-        const { metricsData, transactionsData } = await loadDashboardData();
+        const { hasReal, metricsData, transactionsData } =
+          await loadDashboardData();
         if (isMounted) {
+          setHasRealData(hasReal);
           setMetrics(metricsData);
           setRecentTransactions(transactionsData);
         }
       } catch {
         if (isMounted) {
-          setRecentTransactions(sampleTransactions);
+          setHasRealData(false);
+          setRecentTransactions([]);
         }
       } finally {
         if (isMounted) {
@@ -262,7 +268,9 @@ export default function Home() {
   const handleRefresh = async () => {
     setIsLoading(true);
     try {
-      const { metricsData, transactionsData } = await loadDashboardData();
+      const { hasReal, metricsData, transactionsData } =
+        await loadDashboardData();
+      setHasRealData(hasReal);
       setMetrics(metricsData);
       setRecentTransactions(transactionsData);
     } catch {
@@ -276,12 +284,24 @@ export default function Home() {
     txId: string,
     newStatus: OrderStatus
   ) => {
-    const prevList = [...recentTransactions];
-    const targetTx = recentTransactions.find((t) => t.id === txId);
+    const isSample = txId.startsWith("tx-sample-");
+    const currentList =
+      !hasRealData && showDemoData ? sampleTransactions : recentTransactions;
+    const targetTx = currentList.find((t) => t.id === txId);
     const oldStatus = targetTx?.orderStatus;
 
     if (!oldStatus || oldStatus === newStatus) return;
 
+    if (!hasRealData && showDemoData) {
+      setRecentTransactions((prev) =>
+        (prev.length > 0 ? prev : sampleTransactions).map((t) =>
+          t.id === txId ? { ...t, orderStatus: newStatus } : t
+        )
+      );
+      return;
+    }
+
+    const prevList = [...recentTransactions];
     setRecentTransactions((prev) =>
       prev.map((t) => (t.id === txId ? { ...t, orderStatus: newStatus } : t))
     );
@@ -306,7 +326,7 @@ export default function Home() {
     });
 
     try {
-      if (!txId.startsWith("tx-sample-")) {
+      if (!isSample) {
         await supabase
           .from("transactions")
           .update({ order_status: newStatus })
@@ -378,24 +398,70 @@ export default function Home() {
     }
   };
 
-  const filteredTransactions = recentTransactions.filter((tx) => {
+  // Tentukan data yang aktif ditampilkan
+  const effectiveTransactions =
+    hasRealData
+      ? recentTransactions
+      : showDemoData
+      ? recentTransactions.length > 0
+        ? recentTransactions
+        : sampleTransactions
+      : [];
+
+  const effectiveMetrics =
+    hasRealData
+      ? metrics
+      : showDemoData
+      ? sampleMetrics
+      : metrics;
+
+  const filteredTransactions = effectiveTransactions.filter((tx) => {
     if (statusFilter === "all") return true;
     return tx.orderStatus === statusFilter;
   });
 
   return (
     <div className="space-y-6">
+      {/* Header Halaman */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-dark tracking-tight">
-            Dashboard Overview
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-dark tracking-tight">
+              Dashboard Overview
+            </h1>
+            {!hasRealData && showDemoData && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                <Sparkles className="h-3 w-3 text-amber-600" />
+                Data Contoh
+              </span>
+            )}
+          </div>
           <p className="text-xs text-gray-500">
             Pemantauan performa harian operasional dan antrean cucian Laundry Insight
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
+          {!hasRealData && (
+            <button
+              type="button"
+              onClick={() => setShowDemoData((prev) => !prev)}
+              className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50/80 px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100 transition-colors shadow-2xs"
+            >
+              {showDemoData ? (
+                <>
+                  <EyeOff className="h-3.5 w-3.5 text-amber-600" />
+                  <span>Sembunyikan Contoh</span>
+                </>
+              ) : (
+                <>
+                  <Eye className="h-3.5 w-3.5 text-amber-600" />
+                  <span>Lihat contoh tampilan</span>
+                </>
+              )}
+            </button>
+          )}
+
           <button
             type="button"
             onClick={handleRefresh}
@@ -420,6 +486,7 @@ export default function Home() {
         </div>
       </div>
 
+      {/* Grid 4 Kartu Metrik */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {isLoading ? (
           <>
@@ -444,11 +511,18 @@ export default function Home() {
             <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm hover:shadow-md transition-all">
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Total Omzet
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      Total Omzet
+                    </span>
+                    {!hasRealData && showDemoData && (
+                      <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                        Contoh
+                      </span>
+                    )}
+                  </div>
                   <h3 className="text-2xl font-bold text-dark tracking-tight">
-                    {formatRupiah(metrics.totalRevenue)}
+                    {formatRupiah(effectiveMetrics.totalRevenue)}
                   </h3>
                 </div>
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary shadow-xs shrink-0">
@@ -467,11 +541,21 @@ export default function Home() {
             <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm hover:shadow-md transition-all">
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Total Cucian Selesai
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      Total Cucian Selesai
+                    </span>
+                    {!hasRealData && showDemoData && (
+                      <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                        Contoh
+                      </span>
+                    )}
+                  </div>
                   <h3 className="text-2xl font-bold text-dark tracking-tight">
-                    {metrics.totalVolume.toFixed(1)} <span className="text-base font-semibold text-gray-500">Kg</span>
+                    {effectiveMetrics.totalVolume.toFixed(1)}{" "}
+                    <span className="text-base font-semibold text-gray-500">
+                      Kg
+                    </span>
                   </h3>
                 </div>
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-success/10 text-success shadow-xs shrink-0">
@@ -480,42 +564,63 @@ export default function Home() {
               </div>
               <div className="mt-3 flex items-center gap-1.5 text-xs text-gray-400">
                 <span className="inline-flex items-center text-success font-medium">
-                  Status Selesai
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                  Total
                 </span>
-                <span>Volume cucian diproses</span>
+                <span>Volume cucian rampung</span>
               </div>
             </div>
 
             <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm hover:shadow-md transition-all">
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Transaksi Berjalan
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      Antrean Aktif
+                    </span>
+                    {!hasRealData && showDemoData && (
+                      <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                        Contoh
+                      </span>
+                    )}
+                  </div>
                   <h3 className="text-2xl font-bold text-dark tracking-tight">
-                    {metrics.activeOrders} <span className="text-base font-semibold text-gray-500">Antrean</span>
+                    {effectiveMetrics.activeOrders}{" "}
+                    <span className="text-base font-semibold text-gray-500">
+                      Pesanan
+                    </span>
                   </h3>
                 </div>
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-warning/15 text-[#c2841d] shadow-xs shrink-0">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-warning/10 text-warning shadow-xs shrink-0">
                   <Clock className="h-6 w-6" />
                 </div>
               </div>
               <div className="mt-3 flex items-center gap-1.5 text-xs text-gray-400">
                 <span className="inline-flex items-center text-warning font-medium">
-                  Dalam Proses
+                  {effectiveMetrics.activeOrders > 0 ? "Dalam Proses" : "Kosong"}
                 </span>
-                <span>Pesanan belum selesai</span>
+                <span>Belum berstatus selesai</span>
               </div>
             </div>
 
             <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm hover:shadow-md transition-all">
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Pelanggan Baru
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      Pelanggan Baru
+                    </span>
+                    {!hasRealData && showDemoData && (
+                      <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                        Contoh
+                      </span>
+                    )}
+                  </div>
                   <h3 className="text-2xl font-bold text-dark tracking-tight">
-                    {metrics.newCustomers} <span className="text-base font-semibold text-gray-500">Orang</span>
+                    {effectiveMetrics.newCustomers}{" "}
+                    <span className="text-base font-semibold text-gray-500">
+                      Orang
+                    </span>
                   </h3>
                 </div>
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#2A3042]/10 text-sidebar shadow-xs shrink-0">
@@ -533,6 +638,7 @@ export default function Home() {
         )}
       </div>
 
+      {/* Bagian Tabel Transaksi */}
       <div className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border-b border-gray-100 gap-4 bg-white">
           <div>
@@ -540,206 +646,268 @@ export default function Home() {
               <h2 className="text-base font-bold text-dark">
                 Daftar 10 Transaksi Terbaru
               </h2>
-              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
-                Live Status
-              </span>
+              {hasRealData ? (
+                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                  Live Status
+                </span>
+              ) : showDemoData ? (
+                <span className="rounded-full bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                  Data Contoh
+                </span>
+              ) : null}
             </div>
             <p className="text-xs text-gray-400 mt-0.5">
               Antrean pengerjaan cucian dengan fitur pembaruan status 1-klik langsung
             </p>
           </div>
 
-          <div className="flex items-center gap-1.5 self-start sm:self-auto bg-gray-50 p-1 rounded-lg border border-gray-200/80 text-xs">
-            <button
-              type="button"
-              onClick={() => setStatusFilter("all")}
-              className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors ${
-                statusFilter === "all"
-                  ? "bg-dark text-white"
-                  : "text-gray-600 hover:text-dark"
-              }`}
-            >
-              Semua ({recentTransactions.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter("pending")}
-              className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
-                statusFilter === "pending"
-                  ? "bg-warning text-white"
-                  : "text-gray-600 hover:text-warning"
-              }`}
-            >
-              Pending
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter("washing")}
-              className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
-                statusFilter === "washing"
-                  ? "bg-primary text-white"
-                  : "text-gray-600 hover:text-primary"
-              }`}
-            >
-              Washing
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter("ironing")}
-              className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
-                statusFilter === "ironing"
-                  ? "bg-purple-600 text-white"
-                  : "text-gray-600 hover:text-purple-600"
-              }`}
-            >
-              Ironing
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter("completed")}
-              className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
-                statusFilter === "completed"
-                  ? "bg-success text-white"
-                  : "text-gray-600 hover:text-success"
-              }`}
-            >
-              Selesai
-            </button>
+          {(hasRealData || showDemoData) && (
+            <div className="flex items-center gap-1.5 self-start sm:self-auto bg-gray-50 p-1 rounded-lg border border-gray-200/80 text-xs">
+              <button
+                type="button"
+                onClick={() => setStatusFilter("all")}
+                className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors ${
+                  statusFilter === "all"
+                    ? "bg-dark text-white"
+                    : "text-gray-600 hover:text-dark"
+                }`}
+              >
+                Semua ({effectiveTransactions.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter("pending")}
+                className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
+                  statusFilter === "pending"
+                    ? "bg-warning text-white"
+                    : "text-gray-600 hover:text-warning"
+                }`}
+              >
+                Pending
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter("washing")}
+                className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
+                  statusFilter === "washing"
+                    ? "bg-primary text-white"
+                    : "text-gray-600 hover:text-primary"
+                }`}
+              >
+                Washing
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter("ironing")}
+                className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
+                  statusFilter === "ironing"
+                    ? "bg-purple-600 text-white"
+                    : "text-gray-600 hover:text-purple-600"
+                }`}
+              >
+                Ironing
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter("completed")}
+                className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
+                  statusFilter === "completed"
+                    ? "bg-success text-white"
+                    : "text-gray-600 hover:text-success"
+                }`}
+              >
+                Selesai
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Kondisi Empty State Jujur saat belum ada data sama sekali dan bukan mode demo */}
+        {!isLoading && !hasRealData && !showDemoData ? (
+          <div className="p-8 sm:p-14 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-4 shadow-2xs">
+              <ShoppingBag className="h-8 w-8" />
+            </div>
+            <h3 className="text-base font-bold text-dark mb-1.5">
+              Belum ada transaksi, mulai catat transaksi pertama
+            </h3>
+            <p className="text-xs text-gray-500 max-w-md mx-auto mb-6 leading-relaxed">
+              Belum ada data transaksi yang tersimpan di sistem. Anda dapat mulai mencatat pesanan pelanggan atau mengimpor data spreadsheet.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <Link
+                href="/transactions/new"
+                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-primary/90 transition-all"
+              >
+                <PlusCircle className="h-4 w-4" />
+                <span>+ Catat Transaksi Pertama</span>
+              </Link>
+              <button
+                type="button"
+                onClick={() => setShowDemoData(true)}
+                className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 transition-all"
+              >
+                <Sparkles className="h-4 w-4 text-amber-600" />
+                <span>Lihat contoh tampilan</span>
+              </button>
+            </div>
           </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="border-b border-gray-100 bg-[#F8F9FA] text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-              <tr>
-                <th className="py-3 px-4">Invoice</th>
-                <th className="py-3 px-4">Pelanggan</th>
-                <th className="py-3 px-4">Berat/Qty</th>
-                <th className="py-3 px-4">Total Harga</th>
-                <th className="py-3 px-4">Tanggal</th>
-                <th className="py-3 px-4">Status Pesanan</th>
-                <th className="py-3 px-4 text-center">Aksi Cepat</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {isLoading ? (
+        ) : (
+          <div className="overflow-x-auto min-w-full">
+            <table className="w-full text-left text-xs min-w-[720px]">
+              <thead className="border-b border-gray-100 bg-[#F8F9FA] text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-xs text-gray-400">
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
-                      <span>Memuat antrean transaksi...</span>
-                    </div>
-                  </td>
+                  <th className="py-3 px-4">Invoice</th>
+                  <th className="py-3 px-4">Pelanggan</th>
+                  <th className="py-3 px-4">Berat/Qty</th>
+                  <th className="py-3 px-4">Total Harga</th>
+                  <th className="py-3 px-4">Tanggal</th>
+                  <th className="py-3 px-4">Status Pesanan</th>
+                  <th className="py-3 px-4 text-center">Aksi Cepat</th>
                 </tr>
-              ) : filteredTransactions.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-8 text-center text-xs text-gray-400">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <AlertCircle className="h-6 w-6 text-gray-300" />
-                      <span>Tidak ada transaksi pada kategori ini.</span>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredTransactions.map((tx) => {
-                  const nextStatus = getNextStatus(tx.orderStatus);
-                  const isCompleted = tx.orderStatus === "completed";
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {isLoading ? (
+                  // Loading Skeleton Rows
+                  <>
+                    {[...Array(5)].map((_, i) => (
+                      <tr key={i} className="animate-pulse border-b border-gray-100">
+                        <td className="py-4 px-4">
+                          <div className="h-3.5 w-28 bg-gray-200 rounded"></div>
+                        </td>
+                        <td className="py-4 px-4 space-y-1.5">
+                          <div className="h-3.5 w-32 bg-gray-200 rounded"></div>
+                          <div className="h-2.5 w-20 bg-gray-100 rounded"></div>
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="h-3.5 w-16 bg-gray-200 rounded"></div>
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="h-3.5 w-24 bg-gray-200 rounded"></div>
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="h-3.5 w-20 bg-gray-200 rounded"></div>
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="h-6 w-20 bg-gray-200 rounded-full"></div>
+                        </td>
+                        <td className="py-4 px-4 text-center">
+                          <div className="h-7 w-24 bg-gray-200 rounded-lg mx-auto"></div>
+                        </td>
+                      </tr>
+                    ))}
+                  </>
+                ) : filteredTransactions.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-xs text-gray-400">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <AlertCircle className="h-6 w-6 text-gray-300" />
+                        <span>Tidak ada transaksi pada filter ini.</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredTransactions.map((tx) => {
+                    const nextStatus = getNextStatus(tx.orderStatus);
+                    const isCompleted = tx.orderStatus === "completed";
 
-                  return (
-                    <tr
-                      key={tx.id}
-                      className="hover:bg-gray-50/70 transition-colors"
-                    >
-                      <td className="py-3 px-4">
-                        <span className="font-mono text-xs font-bold text-dark">
-                          {tx.invoice}
-                        </span>
-                      </td>
-
-                      <td className="py-3 px-4">
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-dark">
-                            {tx.customerName}
+                    return (
+                      <tr
+                        key={tx.id}
+                        className="hover:bg-gray-50/70 transition-colors"
+                      >
+                        <td className="py-3 px-4">
+                          <span className="font-mono text-xs font-bold text-dark">
+                            {tx.invoice}
                           </span>
-                          <span className="font-mono text-[11px] text-gray-400">
-                            {tx.customerPhone}
-                          </span>
-                        </div>
-                      </td>
+                        </td>
 
-                      <td className="py-3 px-4 text-gray-700 font-medium">
-                        {tx.totalWeight} kg
-                      </td>
+                        <td className="py-3 px-4">
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-dark">
+                              {tx.customerName}
+                            </span>
+                            <span className="font-mono text-[11px] text-gray-400">
+                              {tx.customerPhone}
+                            </span>
+                          </div>
+                        </td>
 
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-dark">
-                            {formatRupiah(tx.totalAmount)}
-                          </span>
-                          <span
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                              tx.paymentStatus === "paid"
-                                ? "bg-success/10 text-success"
-                                : "bg-warning/10 text-warning"
-                            }`}
-                          >
-                            {tx.paymentStatus === "paid" ? "Lunas" : "Unpaid"}
-                          </span>
-                        </div>
-                      </td>
+                        <td className="py-3 px-4 text-gray-700 font-medium">
+                          {tx.totalWeight} kg
+                        </td>
 
-                      <td className="py-3 px-4 text-gray-500">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3 text-gray-400" />
-                          <span>{formatDate(tx.createdAt)}</span>
-                        </div>
-                      </td>
-
-                      <td className="py-3 px-4">
-                        {renderStatusBadge(tx.orderStatus)}
-                      </td>
-
-                      <td className="py-3 px-4">
-                        <div className="flex items-center justify-center gap-2">
-                          <select
-                            aria-label={`Ubah status pesanan ${tx.invoice}`}
-                            value={tx.orderStatus}
-                            onChange={(e) =>
-                              handleStatusChange(
-                                tx.id,
-                                e.target.value as OrderStatus
-                              )
-                            }
-                            className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs text-dark focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all cursor-pointer font-medium"
-                          >
-                            <option value="pending">Pending</option>
-                            <option value="washing">Washing</option>
-                            <option value="ironing">Ironing</option>
-                            <option value="completed">Completed</option>
-                          </select>
-
-                          {!isCompleted && (
-                            <button
-                              type="button"
-                              onClick={() => handleStatusChange(tx.id, nextStatus)}
-                              title={getNextActionLabel(tx.orderStatus)}
-                              className="flex items-center gap-1 rounded-lg bg-gray-100 hover:bg-primary hover:text-white px-2 py-1 text-[11px] font-semibold text-gray-700 transition-colors shadow-2xs"
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-dark">
+                              {formatRupiah(tx.totalAmount)}
+                            </span>
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                                tx.paymentStatus === "paid"
+                                  ? "bg-success/10 text-success"
+                                  : "bg-warning/10 text-warning"
+                              }`}
                             >
-                              <span>{getNextActionLabel(tx.orderStatus)}</span>
-                              <ArrowRight className="h-3 w-3" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                              {tx.paymentStatus === "paid" ? "Lunas" : "Unpaid"}
+                            </span>
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-4 text-gray-500">
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3 text-gray-400" />
+                            <span>{formatDate(tx.createdAt)}</span>
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-4">
+                          {renderStatusBadge(tx.orderStatus)}
+                        </td>
+
+                        <td className="py-3 px-4">
+                          <div className="flex items-center justify-center gap-2">
+                            <select
+                              aria-label={`Ubah status pesanan ${tx.invoice}`}
+                              value={tx.orderStatus}
+                              onChange={(e) =>
+                                handleStatusChange(
+                                  tx.id,
+                                  e.target.value as OrderStatus
+                                )
+                              }
+                              className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs text-dark focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all cursor-pointer font-medium"
+                            >
+                              <option value="pending">Pending</option>
+                              <option value="washing">Washing</option>
+                              <option value="ironing">Ironing</option>
+                              <option value="completed">Completed</option>
+                            </select>
+
+                            {!isCompleted && (
+                              <button
+                                type="button"
+                                onClick={() => handleStatusChange(tx.id, nextStatus)}
+                                title={getNextActionLabel(tx.orderStatus)}
+                                className="flex items-center gap-1 rounded-lg bg-gray-100 hover:bg-primary hover:text-white px-2 py-1 text-[11px] font-semibold text-gray-700 transition-colors shadow-2xs"
+                              >
+                                <span>{getNextActionLabel(tx.orderStatus)}</span>
+                                <ArrowRight className="h-3 w-3" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
+      {/* Kartu Aksi Cepat */}
       <div className="rounded-xl border border-gray-200/80 bg-white p-6 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
@@ -753,7 +921,7 @@ export default function Home() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Link
               href="/transactions/new"
               className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3.5 py-2 text-xs font-semibold text-dark hover:bg-gray-50 hover:border-primary/40 transition-all"

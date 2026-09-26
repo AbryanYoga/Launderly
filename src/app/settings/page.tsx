@@ -25,11 +25,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import type { Service, ServiceUnit, Category, PaymentMethod } from "@/types";
-
-interface ToastMessage {
-  type: "success" | "error";
-  text: string;
-}
+import { Toast, type ToastMessage } from "@/components/Toast";
 
 const defaultCategories: Category[] = [
   {
@@ -816,33 +812,7 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      {toast && (
-        <div
-          className={`fixed top-4 right-4 z-50 flex items-center gap-3 rounded-xl border p-4 shadow-lg transition-all ${
-            toast.type === "success"
-              ? "border-success/30 bg-white text-dark shadow-success/10"
-              : "border-danger/30 bg-white text-dark shadow-danger/10"
-          }`}
-        >
-          {toast.type === "success" ? (
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-success/10 text-success">
-              <CheckCircle2 className="h-5 w-5" />
-            </div>
-          ) : (
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-danger/10 text-danger">
-              <AlertCircle className="h-5 w-5" />
-            </div>
-          )}
-          <span className="text-xs font-semibold">{toast.text}</span>
-          <button
-            type="button"
-            onClick={() => setToast(null)}
-            className="text-gray-400 hover:text-dark ml-2"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      )}
+      <Toast toast={toast} onClose={() => setToast(null)} />
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -982,7 +952,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-xs min-w-[700px]">
               <thead className="border-b border-gray-100 bg-[#F8F9FA] text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                 <tr>
                   <th className="py-3 px-4">No</th>
@@ -997,17 +967,20 @@ export default function SettingsPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {isLoadingServices ? (
-                  <tr>
-                    <td
-                      colSpan={8}
-                      className="py-8 text-center text-xs text-gray-400"
-                    >
-                      <div className="flex items-center justify-center gap-2">
-                        <RotateCw className="h-4 w-4 animate-spin text-primary" />
-                        <span>Memuat master tarif layanan...</span>
-                      </div>
-                    </td>
-                  </tr>
+                  <>
+                    {[1, 2, 3, 4].map((i) => (
+                      <tr key={i} className="animate-pulse">
+                        <td className="py-3 px-4"><div className="h-4 w-4 bg-gray-200 rounded" /></td>
+                        <td className="py-3 px-4"><div className="h-4 w-32 bg-gray-200 rounded" /></td>
+                        <td className="py-3 px-4"><div className="h-5 w-20 bg-gray-200 rounded-full" /></td>
+                        <td className="py-3 px-4"><div className="h-4 w-12 bg-gray-200 rounded" /></td>
+                        <td className="py-3 px-4"><div className="h-4 w-24 bg-gray-200 rounded" /></td>
+                        <td className="py-3 px-4"><div className="h-5 w-16 bg-gray-200 rounded-full" /></td>
+                        <td className="py-3 px-4 text-center"><div className="h-5 w-10 bg-gray-200 rounded-full mx-auto" /></td>
+                        <td className="py-3 px-4 text-center"><div className="h-6 w-6 bg-gray-200 rounded mx-auto" /></td>
+                      </tr>
+                    ))}
+                  </>
                 ) : services.length === 0 ? (
                   <tr>
                     <td
@@ -1130,7 +1103,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-xs min-w-[600px]">
               <thead className="border-b border-gray-100 bg-[#F8F9FA] text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                 <tr>
                   <th className="py-3 px-4">No</th>
@@ -1143,17 +1116,18 @@ export default function SettingsPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {isLoadingCategories ? (
-                  <tr>
-                    <td
-                      colSpan={6}
-                      className="py-8 text-center text-xs text-gray-400"
-                    >
-                      <div className="flex items-center justify-center gap-2">
-                        <RotateCw className="h-4 w-4 animate-spin text-primary" />
-                        <span>Memuat data kategori...</span>
-                      </div>
-                    </td>
-                  </tr>
+                  <>
+                    {[1, 2, 3].map((i) => (
+                      <tr key={i} className="animate-pulse">
+                        <td className="py-3 px-4"><div className="h-4 w-4 bg-gray-200 rounded" /></td>
+                        <td className="py-3 px-4"><div className="h-4 w-28 bg-gray-200 rounded" /></td>
+                        <td className="py-3 px-4"><div className="h-4 w-20 bg-gray-200 rounded" /></td>
+                        <td className="py-3 px-4"><div className="h-5 w-16 bg-gray-200 rounded-full" /></td>
+                        <td className="py-3 px-4 text-center"><div className="h-5 w-10 bg-gray-200 rounded-full mx-auto" /></td>
+                        <td className="py-3 px-4 text-center"><div className="h-6 w-6 bg-gray-200 rounded mx-auto" /></td>
+                      </tr>
+                    ))}
+                  </>
                 ) : categories.length === 0 ? (
                   <tr>
                     <td
@@ -1262,7 +1236,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-xs min-w-[550px]">
               <thead className="border-b border-gray-100 bg-[#F8F9FA] text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                 <tr>
                   <th className="py-3 px-4">No</th>
@@ -1274,17 +1248,17 @@ export default function SettingsPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {isLoadingPaymentMethods ? (
-                  <tr>
-                    <td
-                      colSpan={5}
-                      className="py-8 text-center text-xs text-gray-400"
-                    >
-                      <div className="flex items-center justify-center gap-2">
-                        <RotateCw className="h-4 w-4 animate-spin text-primary" />
-                        <span>Memuat data metode pembayaran...</span>
-                      </div>
-                    </td>
-                  </tr>
+                  <>
+                    {[1, 2, 3].map((i) => (
+                      <tr key={i} className="animate-pulse">
+                        <td className="py-3 px-4"><div className="h-4 w-4 bg-gray-200 rounded" /></td>
+                        <td className="py-3 px-4"><div className="h-4 w-28 bg-gray-200 rounded" /></td>
+                        <td className="py-3 px-4"><div className="h-5 w-16 bg-gray-200 rounded-full" /></td>
+                        <td className="py-3 px-4 text-center"><div className="h-5 w-10 bg-gray-200 rounded-full mx-auto" /></td>
+                        <td className="py-3 px-4 text-center"><div className="h-6 w-6 bg-gray-200 rounded mx-auto" /></td>
+                      </tr>
+                    ))}
+                  </>
                 ) : paymentMethods.length === 0 ? (
                   <tr>
                     <td

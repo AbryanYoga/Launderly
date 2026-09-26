@@ -795,6 +795,33 @@ export default function ImportTransactionsPage() {
         </div>
       )}
 
+      {fileName && isProcessing && parsedRows.length === 0 && (
+        <div className="rounded-xl border border-gray-200/80 bg-white shadow-xs overflow-hidden animate-pulse">
+          <div className="p-4 border-b border-gray-100 bg-[#F8F9FA] flex items-center justify-between">
+            <div className="space-y-1.5">
+              <div className="h-4 w-48 bg-gray-200 rounded"></div>
+              <div className="h-3 w-64 bg-gray-100 rounded"></div>
+            </div>
+            <div className="h-7 w-28 bg-gray-200 rounded-lg"></div>
+          </div>
+          <div className="p-4 space-y-3">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="flex items-center gap-4 py-2 border-b border-gray-100">
+                <div className="h-3.5 w-6 bg-gray-200 rounded"></div>
+                <div className="h-3.5 w-28 bg-gray-200 rounded"></div>
+                <div className="h-3.5 w-24 bg-gray-200 rounded"></div>
+                <div className="h-3.5 w-20 bg-gray-100 rounded"></div>
+                <div className="h-3.5 w-16 bg-gray-100 rounded"></div>
+                <div className="h-3.5 w-20 bg-gray-200 rounded"></div>
+                <div className="h-3.5 w-16 bg-gray-100 rounded"></div>
+                <div className="h-5 w-14 bg-gray-200 rounded-full"></div>
+                <div className="h-5 w-16 bg-gray-200 rounded-full"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {parsedRows.length > 0 && !saveProgress && (
         <div className="rounded-xl border border-gray-200/80 bg-white shadow-xs overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border-b border-gray-100 bg-[#F8F9FA] gap-3">
@@ -848,8 +875,8 @@ export default function ImportTransactionsPage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto max-h-[480px]">
-            <table className="w-full text-left text-xs">
+          <div className="overflow-x-auto min-w-full max-h-[480px]">
+            <table className="w-full text-left text-xs min-w-[900px]">
               <thead className="sticky top-0 z-10 border-b border-gray-200 bg-gray-50 text-[11px] font-bold text-dark uppercase shadow-xs">
                 <tr>
                   <th className="py-3 px-4">No</th>

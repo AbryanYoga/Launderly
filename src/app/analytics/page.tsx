@@ -19,6 +19,9 @@ import {
   Sparkles,
   Crown,
   CreditCard,
+  PlusCircle,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -158,9 +161,9 @@ export default function AnalyticsPage() {
   const [paymentCompositionData, setPaymentCompositionData] =
     useState<ServiceComposition[]>(mockPaymentComposition);
 
-  const [allTransactions, setAllTransactions] = useState<TransactionRecord[]>(
-    sampleOperationalTransactions
-  );
+  const [allTransactions, setAllTransactions] = useState<TransactionRecord[]>([]);
+  const [hasRealData, setHasRealData] = useState<boolean>(false);
+  const [showDemoData, setShowDemoData] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
 
   const queryAnalytics = async (range: TimeRange) => {
@@ -235,7 +238,9 @@ export default function AnalyticsPage() {
     let records: TransactionRecord[] = [];
     let paymentComp: ServiceComposition[] = [];
 
-    if (transactions && transactions.length >= 2) {
+    const hasReal = !!(transactions && transactions.length > 0);
+
+    if (transactions && transactions.length > 0) {
       interface RawCustomer {
         name?: string;
         phone?: string;
@@ -298,13 +303,6 @@ export default function AnalyticsPage() {
         value: payCounts[k],
         color: SKOTE_COLORS[idx % SKOTE_COLORS.length],
       }));
-    } else {
-      if (range === "7d") points = mock7DaysRevenue;
-      else if (range === "30d") points = mock30DaysRevenue;
-      else points = mockMonthRevenue;
-
-      records = sampleOperationalTransactions;
-      paymentComp = mockPaymentComposition;
     }
 
     let comp: ServiceComposition[] = [];
@@ -351,16 +349,9 @@ export default function AnalyticsPage() {
         value: categoryCounts[k],
         color: SKOTE_COLORS[idx % SKOTE_COLORS.length],
       }));
-    } else {
-      comp = mockComposition;
-      catComp = mockCategoryComposition;
     }
 
-    if (paymentComp.length === 0) {
-      paymentComp = mockPaymentComposition;
-    }
-
-    return { points, comp, catComp, paymentComp, records };
+    return { hasReal, points, comp, catComp, paymentComp, records };
   };
 
   useEffect(() => {
@@ -368,9 +359,10 @@ export default function AnalyticsPage() {
 
     async function load() {
       try {
-        const { points, comp, catComp, paymentComp, records } =
+        const { hasReal, points, comp, catComp, paymentComp, records } =
           await queryAnalytics(timeRange);
         if (isMounted) {
+          setHasRealData(hasReal);
           setRevenueData(points);
           setCompositionData(comp);
           setCategoryCompositionData(catComp);
@@ -379,13 +371,12 @@ export default function AnalyticsPage() {
         }
       } catch {
         if (isMounted) {
-          if (timeRange === "7d") setRevenueData(mock7DaysRevenue);
-          else if (timeRange === "30d") setRevenueData(mock30DaysRevenue);
-          else setRevenueData(mockMonthRevenue);
-          setCompositionData(mockComposition);
-          setCategoryCompositionData(mockCategoryComposition);
-          setPaymentCompositionData(mockPaymentComposition);
-          setAllTransactions(sampleOperationalTransactions);
+          setHasRealData(false);
+          setRevenueData([]);
+          setCompositionData([]);
+          setCategoryCompositionData([]);
+          setPaymentCompositionData([]);
+          setAllTransactions([]);
         }
       } finally {
         if (isMounted) {
@@ -409,8 +400,9 @@ export default function AnalyticsPage() {
   const handleRefresh = async () => {
     setIsLoading(true);
     try {
-      const { points, comp, catComp, paymentComp, records } =
+      const { hasReal, points, comp, catComp, paymentComp, records } =
         await queryAnalytics(timeRange);
+      setHasRealData(hasReal);
       setRevenueData(points);
       setCompositionData(comp);
       setCategoryCompositionData(catComp);
@@ -423,31 +415,65 @@ export default function AnalyticsPage() {
     }
   };
 
+  const effectiveRevenueData = useMemo(() => {
+    if (hasRealData && revenueData.length > 0) return revenueData;
+    if (showDemoData) {
+      if (timeRange === "7d") return mock7DaysRevenue;
+      if (timeRange === "30d") return mock30DaysRevenue;
+      return mockMonthRevenue;
+    }
+    return [];
+  }, [hasRealData, showDemoData, revenueData, timeRange]);
+
+  const effectiveComposition = useMemo(() => {
+    if (hasRealData && compositionData.length > 0) return compositionData;
+    if (showDemoData) return mockComposition;
+    return [];
+  }, [hasRealData, showDemoData, compositionData]);
+
+  const effectiveCategoryComposition = useMemo(() => {
+    if (hasRealData && categoryCompositionData.length > 0) return categoryCompositionData;
+    if (showDemoData) return mockCategoryComposition;
+    return [];
+  }, [hasRealData, showDemoData, categoryCompositionData]);
+
+  const effectivePaymentComposition = useMemo(() => {
+    if (hasRealData && paymentCompositionData.length > 0) return paymentCompositionData;
+    if (showDemoData) return mockPaymentComposition;
+    return [];
+  }, [hasRealData, showDemoData, paymentCompositionData]);
+
+  const effectiveTransactions = useMemo(() => {
+    if (hasRealData && allTransactions.length > 0) return allTransactions;
+    if (showDemoData) return sampleOperationalTransactions;
+    return [];
+  }, [hasRealData, showDemoData, allTransactions]);
+
   const totalPeriodRevenue = useMemo(
-    () => revenueData.reduce((acc, curr) => acc + curr.omzet, 0),
-    [revenueData]
+    () => effectiveRevenueData.reduce((acc, curr) => acc + curr.omzet, 0),
+    [effectiveRevenueData]
   );
 
   const totalPeriodOrders = useMemo(
-    () => revenueData.reduce((acc, curr) => acc + curr.pesanan, 0),
-    [revenueData]
+    () => effectiveRevenueData.reduce((acc, curr) => acc + curr.pesanan, 0),
+    [effectiveRevenueData]
   );
 
   const topService = useMemo(() => {
-    if (compositionData.length === 0) return "-";
-    return [...compositionData].sort((a, b) => b.value - a.value)[0].name;
-  }, [compositionData]);
+    if (effectiveComposition.length === 0) return "-";
+    return [...effectiveComposition].sort((a, b) => b.value - a.value)[0].name;
+  }, [effectiveComposition]);
 
   const activeCompositionData = useMemo(() => {
     return serviceViewMode === "service"
-      ? compositionData
-      : categoryCompositionData;
-  }, [serviceViewMode, compositionData, categoryCompositionData]);
+      ? effectiveComposition
+      : effectiveCategoryComposition;
+  }, [serviceViewMode, effectiveComposition, effectiveCategoryComposition]);
 
   const peakMatrix = useMemo(() => {
     const initialGrid = DAYS.map(() => TIME_SLOTS.map(() => 0));
 
-    return allTransactions.reduce((grid, tx) => {
+    return effectiveTransactions.reduce((grid, tx) => {
       const d = new Date(tx.createdAt);
       const dayIdx = (d.getDay() + 6) % 7;
       const hour = d.getHours();
@@ -465,7 +491,7 @@ export default function AnalyticsPage() {
       }
       return grid;
     }, initialGrid);
-  }, [allTransactions]);
+  }, [effectiveTransactions]);
 
   const { busiestDay, peakSlot, maxDayTotal, maxSlotTotal } = useMemo(() => {
     const dayTotals = peakMatrix.map((row) =>
@@ -493,7 +519,7 @@ export default function AnalyticsPage() {
   }, [peakMatrix]);
 
   const retentionMetrics = useMemo(() => {
-    const customerSummary = allTransactions.reduce((acc, tx) => {
+    const customerSummary = effectiveTransactions.reduce((acc, tx) => {
       const key = tx.customerPhone || tx.customerName || "unknown";
       if (!acc[key]) {
         acc[key] = {
@@ -520,13 +546,13 @@ export default function AnalyticsPage() {
       totalCustomers > 0 ? Math.round((repeatCount / totalCustomers) * 100) : 0;
     const newRate = 100 - repeatRate;
 
-    const totalRevenueAll = allTransactions.reduce(
+    const totalRevenueAll = effectiveTransactions.reduce(
       (sum, tx) => sum + tx.totalAmount,
       0
     );
     const aov =
-      allTransactions.length > 0
-        ? Math.round(totalRevenueAll / allTransactions.length)
+      effectiveTransactions.length > 0
+        ? Math.round(totalRevenueAll / effectiveTransactions.length)
         : 0;
 
     const avgSpentPerCustomer =
@@ -541,10 +567,10 @@ export default function AnalyticsPage() {
       aov,
       avgSpentPerCustomer,
     };
-  }, [allTransactions]);
+  }, [effectiveTransactions]);
 
   const loyalCustomers = useMemo(() => {
-    const grouped = allTransactions.reduce((acc, tx) => {
+    const grouped = effectiveTransactions.reduce((acc, tx) => {
       const key = tx.customerPhone || tx.customerName || "unknown";
       if (!acc[key]) {
         acc[key] = {
@@ -573,7 +599,7 @@ export default function AnalyticsPage() {
         rank: idx + 1,
         tier: idx === 0 ? "Platinum" : idx < 3 ? "Gold" : "Silver",
       }));
-  }, [allTransactions]);
+  }, [effectiveTransactions]);
 
   const getHeatColorClass = (count: number) => {
     if (count === 0) return "bg-gray-50 text-gray-400";
@@ -595,13 +621,39 @@ export default function AnalyticsPage() {
               <ArrowLeft className="h-4 w-4" />
             </Link>
             <h1 className="text-xl font-bold text-dark">Analitik & Laporan</h1>
+            {!hasRealData && showDemoData && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                <Sparkles className="h-3 w-3 text-amber-600" />
+                Data Contoh
+              </span>
+            )}
           </div>
           <p className="text-xs text-gray-500">
             Visualisasi tren pendapatan, retensi pelanggan, komposisi metode bayar, dan operasional jam ramai
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
+          {!hasRealData && (
+            <button
+              type="button"
+              onClick={() => setShowDemoData((prev) => !prev)}
+              className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50/80 px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100 transition-colors shadow-2xs"
+            >
+              {showDemoData ? (
+                <>
+                  <EyeOff className="h-3.5 w-3.5 text-amber-600" />
+                  <span>Sembunyikan Contoh</span>
+                </>
+              ) : (
+                <>
+                  <Eye className="h-3.5 w-3.5 text-amber-600" />
+                  <span>Lihat contoh tampilan</span>
+                </>
+              )}
+            </button>
+          )}
+
           <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-xs text-xs">
             <Calendar className="h-4 w-4 text-gray-400" />
             <select
@@ -632,75 +684,151 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              Omzet Periode
-            </span>
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <DollarSign className="h-4 w-4" />
-            </div>
+      {isLoading ? (
+        <div className="space-y-6">
+          {/* Skeleton 4 Kartu Metrik */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <div
+                key={i}
+                className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm animate-pulse"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="h-3 w-20 bg-gray-200 rounded"></div>
+                  <div className="h-9 w-9 bg-gray-200 rounded-lg"></div>
+                </div>
+                <div className="h-7 w-28 bg-gray-200 rounded mt-3"></div>
+                <div className="h-2.5 w-16 bg-gray-100 rounded mt-2"></div>
+              </div>
+            ))}
           </div>
-          <p className="text-xl font-bold text-dark mt-2 tracking-tight">
-            {formatRupiah(totalPeriodRevenue)}
-          </p>
-          <span className="text-[11px] text-gray-400 mt-1 block">
-            Filter: {timeRange === "7d" ? "7 Hari" : timeRange === "30d" ? "30 Hari" : "Bulan Ini"}
-          </span>
-        </div>
 
-        <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              Total Pesanan
-            </span>
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-success/10 text-success">
-              <ShoppingBag className="h-4 w-4" />
+          {/* Skeleton Area Chart */}
+          <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm animate-pulse">
+            <div className="flex items-center justify-between pb-4 mb-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-lg bg-gray-200"></div>
+                <div className="space-y-1.5">
+                  <div className="h-3.5 w-36 bg-gray-200 rounded"></div>
+                  <div className="h-2.5 w-48 bg-gray-100 rounded"></div>
+                </div>
+              </div>
             </div>
+            <div className="h-64 w-full bg-gray-100 rounded-xl"></div>
           </div>
-          <p className="text-xl font-bold text-dark mt-2 tracking-tight">
-            {totalPeriodOrders} <span className="text-xs font-normal text-gray-500">Nota</span>
-          </p>
-          <span className="text-[11px] text-gray-400 mt-1 block">
-            Transaksi terdata
-          </span>
-        </div>
 
-        <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              Rata-rata Nota (AOV)
-            </span>
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#556EE6]/10 text-[#556EE6]">
-              <TrendingUp className="h-4 w-4" />
+          {/* Skeleton Donut Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="lg:col-span-6 rounded-xl border border-gray-100 bg-white p-6 shadow-sm animate-pulse">
+              <div className="h-4 w-40 bg-gray-200 rounded mb-4"></div>
+              <div className="h-56 w-full bg-gray-100 rounded-xl"></div>
+            </div>
+            <div className="lg:col-span-6 rounded-xl border border-gray-100 bg-white p-6 shadow-sm animate-pulse">
+              <div className="h-4 w-40 bg-gray-200 rounded mb-4"></div>
+              <div className="h-56 w-full bg-gray-100 rounded-xl"></div>
             </div>
           </div>
-          <p className="text-xl font-bold text-dark mt-2 tracking-tight">
-            {formatRupiah(retentionMetrics.aov)}
-          </p>
-          <span className="text-[11px] text-gray-400 mt-1 block">
-            Per nota transaksi
-          </span>
         </div>
+      ) : !hasRealData && !showDemoData ? (
+        <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 sm:p-16 text-center shadow-xs">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-4 shadow-2xs">
+            <TrendingUp className="h-8 w-8" />
+          </div>
+          <h3 className="text-base font-bold text-dark mb-1.5">
+            Belum Ada Data Transaksi untuk Dianalisis
+          </h3>
+          <p className="text-xs text-gray-500 max-w-md mx-auto mb-6 leading-relaxed">
+            Belum ada transaksi, mulai catat transaksi pertama untuk mengaktifkan grafik tren pendapatan, breakdown layanan & kategori, sebaran metode pembayaran, dan analisis pelanggan.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Link
+              href="/transactions/new"
+              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-primary/90 transition-all"
+            >
+              <PlusCircle className="h-4 w-4" />
+              <span>+ Catat Transaksi Baru</span>
+            </Link>
+            <button
+              type="button"
+              onClick={() => setShowDemoData(true)}
+              className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 transition-all"
+            >
+              <Sparkles className="h-4 w-4 text-amber-600" />
+              <span>Lihat contoh tampilan</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Omzet Periode
+                </span>
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <DollarSign className="h-4 w-4" />
+                </div>
+              </div>
+              <p className="text-xl font-bold text-dark mt-2 tracking-tight">
+                {formatRupiah(totalPeriodRevenue)}
+              </p>
+              <span className="text-[11px] text-gray-400 mt-1 block">
+                Filter: {timeRange === "7d" ? "7 Hari" : timeRange === "30d" ? "30 Hari" : "Bulan Ini"}
+              </span>
+            </div>
 
-        <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              Layanan Terlaris
-            </span>
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-warning/15 text-[#c2841d]">
-              <Award className="h-4 w-4" />
+            <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Total Pesanan
+                </span>
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-success/10 text-success">
+                  <ShoppingBag className="h-4 w-4" />
+                </div>
+              </div>
+              <p className="text-xl font-bold text-dark mt-2 tracking-tight">
+                {totalPeriodOrders} <span className="text-xs font-normal text-gray-500">Nota</span>
+              </p>
+              <span className="text-[11px] text-gray-400 mt-1 block">
+                Transaksi terdata
+              </span>
+            </div>
+
+            <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Rata-rata Nota (AOV)
+                </span>
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#556EE6]/10 text-[#556EE6]">
+                  <TrendingUp className="h-4 w-4" />
+                </div>
+              </div>
+              <p className="text-xl font-bold text-dark mt-2 tracking-tight">
+                {formatRupiah(retentionMetrics.aov)}
+              </p>
+              <span className="text-[11px] text-gray-400 mt-1 block">
+                Per nota transaksi
+              </span>
+            </div>
+
+            <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Layanan Terlaris
+                </span>
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-warning/15 text-[#c2841d]">
+                  <Award className="h-4 w-4" />
+                </div>
+              </div>
+              <p className="text-sm font-bold text-dark mt-2 truncate">
+                {topService}
+              </p>
+              <span className="text-[11px] text-gray-400 mt-1 block">
+                Porsi volume tertinggi
+              </span>
             </div>
           </div>
-          <p className="text-sm font-bold text-dark mt-2 truncate">
-            {topService}
-          </p>
-          <span className="text-[11px] text-gray-400 mt-1 block">
-            Porsi volume tertinggi
-          </span>
-        </div>
-      </div>
 
       {/* Row 1: Area Chart Tren Pendapatan */}
       <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
@@ -732,7 +860,7 @@ export default function AnalyticsPage() {
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
-                data={revenueData}
+                data={effectiveRevenueData}
                 margin={{ top: 10, right: 10, left: 10, bottom: 0 }}
               >
                 <defs>
@@ -913,7 +1041,7 @@ export default function AnalyticsPage() {
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent mr-2"></div>
                 Menghitung channel...
               </div>
-            ) : paymentCompositionData.length === 0 ? (
+            ) : effectivePaymentComposition.length === 0 ? (
               <div className="h-full w-full flex items-center justify-center text-xs text-gray-400">
                 Belum ada data pembayaran
               </div>
@@ -921,7 +1049,7 @@ export default function AnalyticsPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={paymentCompositionData}
+                    data={effectivePaymentComposition}
                     cx="50%"
                     cy="50%"
                     innerRadius={50}
@@ -929,7 +1057,7 @@ export default function AnalyticsPage() {
                     paddingAngle={3}
                     dataKey="value"
                   >
-                    {paymentCompositionData.map((entry, index) => (
+                    {effectivePaymentComposition.map((entry, index) => (
                       <Cell
                         key={`cell-payment-${index}`}
                         fill={entry.color || SKOTE_COLORS[index % SKOTE_COLORS.length]}
@@ -1150,8 +1278,8 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-center text-xs border-collapse">
+        <div className="overflow-x-auto min-w-full">
+          <table className="w-full text-center text-xs border-collapse min-w-[620px]">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/70 text-[11px] font-bold text-dark uppercase">
                 <th className="py-3 px-4 text-left font-bold text-gray-500">Hari / Rentang Jam</th>
@@ -1222,6 +1350,8 @@ export default function AnalyticsPage() {
           </span>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }
