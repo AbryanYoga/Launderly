@@ -19,14 +19,69 @@ import {
   RotateCcw,
   X,
   AlertTriangle,
+  Wallet,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
-import type { Service, PaymentStatus } from "@/types";
+import type { Service, PaymentStatus, Category, PaymentMethod } from "@/types";
 
 interface ToastMessage {
   type: "success" | "error";
   text: string;
 }
+
+const defaultCategories: Category[] = [
+  {
+    id: "cat-1",
+    name: "Kiloan",
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: "cat-2",
+    name: "Satuan",
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: "cat-3",
+    name: "Express",
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: "cat-4",
+    name: "Setrika",
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+];
+
+const defaultPaymentMethods: PaymentMethod[] = [
+  {
+    id: "pm-1",
+    name: "Cash",
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: "pm-2",
+    name: "Transfer Bank",
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: "pm-3",
+    name: "QRIS",
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: "pm-4",
+    name: "E-Wallet",
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+];
 
 const defaultServices: Service[] = [
   {
@@ -35,6 +90,7 @@ const defaultServices: Service[] = [
     unit: "kg",
     price: 8000,
     is_active: true,
+    category_id: "cat-1",
     created_at: new Date().toISOString(),
   },
   {
@@ -43,6 +99,7 @@ const defaultServices: Service[] = [
     unit: "kg",
     price: 6000,
     is_active: true,
+    category_id: "cat-1",
     created_at: new Date().toISOString(),
   },
   {
@@ -51,6 +108,7 @@ const defaultServices: Service[] = [
     unit: "pcs",
     price: 25000,
     is_active: true,
+    category_id: "cat-2",
     created_at: new Date().toISOString(),
   },
 ];
@@ -86,10 +144,15 @@ function getEstimatedCompletion(): string {
 }
 
 export default function NewTransactionPage() {
+  const [categories, setCategories] = useState<Category[]>(defaultCategories);
+  const [paymentMethods, setPaymentMethods] =
+    useState<PaymentMethod[]>(defaultPaymentMethods);
   const [services, setServices] = useState<Service[]>(defaultServices);
   const [selectedServiceId, setSelectedServiceId] = useState<string>(
     defaultServices[0].id
   );
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] =
+    useState<string>("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
@@ -102,6 +165,7 @@ export default function NewTransactionPage() {
     name?: string;
     phone?: string;
     qty?: string;
+    paymentMethod?: string;
   }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -111,27 +175,47 @@ export default function NewTransactionPage() {
   const nameInputId = useId();
   const phoneInputId = useId();
   const serviceSelectId = useId();
+  const paymentMethodSelectId = useId();
   const qtyInputId = useId();
   const notesInputId = useId();
   const addressInputId = useId();
 
   useEffect(() => {
-    async function loadServices() {
+    async function loadData() {
       try {
-        const { data, error } = await supabase
-          .from("services")
-          .select("*")
-          .eq("is_active", true);
+        const [servicesRes, categoriesRes, paymentsRes] = await Promise.all([
+          supabase
+            .from("services")
+            .select("*")
+            .eq("is_active", true)
+            .order("created_at", { ascending: true }),
+          supabase
+            .from("categories")
+            .select("*")
+            .eq("is_active", true)
+            .order("name", { ascending: true }),
+          supabase
+            .from("payment_methods")
+            .select("*")
+            .eq("is_active", true)
+            .order("created_at", { ascending: true }),
+        ]);
 
-        if (!error && data && data.length > 0) {
-          setServices(data as Service[]);
-          setSelectedServiceId(data[0].id);
+        if (categoriesRes.data && categoriesRes.data.length > 0) {
+          setCategories(categoriesRes.data as Category[]);
+        }
+        if (paymentsRes.data && paymentsRes.data.length > 0) {
+          setPaymentMethods(paymentsRes.data as PaymentMethod[]);
+        }
+        if (servicesRes.data && servicesRes.data.length > 0) {
+          setServices(servicesRes.data as Service[]);
+          setSelectedServiceId(servicesRes.data[0].id);
         }
       } catch {
-        // Fallback to default services
+        // Fallback to default data
       }
     }
-    loadServices();
+    loadData();
   }, []);
 
   useEffect(() => {
@@ -142,13 +226,33 @@ export default function NewTransactionPage() {
 
   const currentService =
     services.find((s) => s.id === selectedServiceId) || services[0];
+  const selectedPaymentMethod = paymentMethods.find(
+    (pm) => pm.id === selectedPaymentMethodId
+  );
   const parsedQty = Math.max(0, parseFloat(qty) || 0);
   const subtotal = parsedQty * (currentService ? currentService.price : 0);
   const grandTotal = subtotal;
   const estimatedDate = getEstimatedCompletion();
 
+  // Group services by category
+  const servicesWithCategory = categories
+    .map((cat) => ({
+      category: cat,
+      services: services.filter((s) => s.category_id === cat.id),
+    }))
+    .filter((group) => group.services.length > 0);
+
+  const uncategorizedServices = services.filter(
+    (s) => !s.category_id || !categories.some((c) => c.id === s.category_id)
+  );
+
   const validate = () => {
-    const errs: { name?: string; phone?: string; qty?: string } = {};
+    const errs: {
+      name?: string;
+      phone?: string;
+      qty?: string;
+      paymentMethod?: string;
+    } = {};
 
     if (!customerName.trim()) {
       errs.name = "Nama pelanggan wajib diisi";
@@ -162,6 +266,10 @@ export default function NewTransactionPage() {
 
     if (!qty || parseFloat(qty) <= 0 || isNaN(parseFloat(qty))) {
       errs.qty = "Jumlah atau berat harus lebih besar dari 0";
+    }
+
+    if (!selectedPaymentMethodId) {
+      errs.paymentMethod = "Metode pembayaran wajib dipilih";
     }
 
     setErrors(errs);
@@ -210,6 +318,7 @@ export default function NewTransactionPage() {
           total_weight: parsedQty,
           total_amount: grandTotal,
           payment_status: paymentStatus,
+          payment_method_id: selectedPaymentMethodId || null,
           order_status: "pending",
           notes: notes.trim() || null,
         })
@@ -256,6 +365,7 @@ export default function NewTransactionPage() {
     setQty("1");
     setNotes("");
     setPaymentStatus("unpaid");
+    setSelectedPaymentMethodId("");
     setInvoiceNumber(generateInvoice());
     setErrors({});
     setIsSuccess(false);
@@ -304,10 +414,13 @@ export default function NewTransactionPage() {
             >
               <ArrowLeft className="h-4 w-4" />
             </Link>
-            <h1 className="text-xl font-bold text-dark">Input Transaksi Manual</h1>
+            <h1 className="text-xl font-bold text-dark">
+              Input Transaksi Manual
+            </h1>
           </div>
           <p className="text-xs text-gray-500">
-            Pencatatan langsung cucian walk-in dengan penyimpanan otomatis ke Supabase
+            Pencatatan langsung cucian walk-in dengan penyimpanan otomatis ke
+            Supabase
           </p>
         </div>
 
@@ -331,7 +444,11 @@ export default function NewTransactionPage() {
                   Transaksi Berhasil Disimpan!
                 </h3>
                 <p className="text-xs text-gray-600">
-                  Nomor nota <span className="font-semibold text-dark">{createdInvoice}</span> telah tersimpan di database Supabase.
+                  Nomor nota{" "}
+                  <span className="font-semibold text-dark">
+                    {createdInvoice}
+                  </span>{" "}
+                  telah tersimpan di database Supabase.
                 </p>
               </div>
             </div>
@@ -451,7 +568,8 @@ export default function NewTransactionPage() {
                   htmlFor={addressInputId}
                   className="block text-xs font-semibold text-dark mb-1.5"
                 >
-                  Alamat <span className="text-gray-400 font-normal">(Opsional)</span>
+                  Alamat{" "}
+                  <span className="text-gray-400 font-normal">(Opsional)</span>
                 </label>
                 <input
                   id={addressInputId}
@@ -476,14 +594,29 @@ export default function NewTransactionPage() {
                   id={serviceSelectId}
                   value={selectedServiceId}
                   onChange={(e) => setSelectedServiceId(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-dark focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-dark focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all font-medium"
                 >
-                  {services.map((service) => (
-                    <option key={service.id} value={service.id}>
-                      {service.name} ({formatRupiah(service.price)} /{" "}
-                      {service.unit})
-                    </option>
+                  {servicesWithCategory.map((group) => (
+                    <optgroup key={group.category.id} label={group.category.name}>
+                      {group.services.map((service) => (
+                        <option key={service.id} value={service.id}>
+                          {service.name} ({formatRupiah(service.price)} /{" "}
+                          {service.unit})
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
+
+                  {uncategorizedServices.length > 0 && (
+                    <optgroup label="Lainnya">
+                      {uncategorizedServices.map((service) => (
+                        <option key={service.id} value={service.id}>
+                          {service.name} ({formatRupiah(service.price)} /{" "}
+                          {service.unit})
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
               </div>
 
@@ -529,35 +662,78 @@ export default function NewTransactionPage() {
               </div>
             </div>
 
-            <div>
-              <span className="block text-xs font-semibold text-dark mb-1.5">
-                Status Pembayaran <span className="text-danger">*</span>
-              </span>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setPaymentStatus("unpaid")}
-                  className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-xs font-semibold transition-all ${
-                    paymentStatus === "unpaid"
-                      ? "border-warning bg-warning/10 text-[#c2841d] ring-1 ring-warning"
-                      : "border-gray-200 bg-gray-50/50 text-gray-600 hover:bg-gray-50"
-                  }`}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <span className="block text-xs font-semibold text-dark mb-1.5">
+                  Status Pembayaran <span className="text-danger">*</span>
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentStatus("unpaid")}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-all ${
+                      paymentStatus === "unpaid"
+                        ? "border-warning bg-warning/10 text-[#c2841d] ring-1 ring-warning"
+                        : "border-gray-200 bg-gray-50/50 text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    <Clock className="h-3.5 w-3.5" />
+                    Belum Lunas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentStatus("paid")}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-all ${
+                      paymentStatus === "paid"
+                        ? "border-success bg-success/10 text-success ring-1 ring-success"
+                        : "border-gray-200 bg-gray-50/50 text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Lunas
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor={paymentMethodSelectId}
+                  className="block text-xs font-semibold text-dark mb-1.5"
                 >
-                  <Clock className="h-4 w-4" />
-                  Belum Lunas
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPaymentStatus("paid")}
-                  className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-xs font-semibold transition-all ${
-                    paymentStatus === "paid"
-                      ? "border-success bg-success/10 text-success ring-1 ring-success"
-                      : "border-gray-200 bg-gray-50/50 text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  <CreditCard className="h-4 w-4" />
-                  Lunas
-                </button>
+                  Metode Pembayaran <span className="text-danger">*</span>
+                </label>
+                <div className="relative">
+                  <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <select
+                    id={paymentMethodSelectId}
+                    value={selectedPaymentMethodId}
+                    onChange={(e) => {
+                      setSelectedPaymentMethodId(e.target.value);
+                      if (errors.paymentMethod)
+                        setErrors({ ...errors, paymentMethod: undefined });
+                    }}
+                    className={`w-full rounded-lg border pl-9 pr-3.5 py-2 text-xs text-dark focus:outline-none focus:ring-1 transition-all ${
+                      errors.paymentMethod
+                        ? "border-danger focus:border-danger focus:ring-danger bg-danger/5"
+                        : "border-gray-200 focus:border-primary focus:ring-primary bg-white"
+                    }`}
+                  >
+                    <option value="">-- Pilih Metode Pembayaran --</option>
+                    {paymentMethods
+                      .filter((pm) => pm.is_active)
+                      .map((pm) => (
+                        <option key={pm.id} value={pm.id}>
+                          {pm.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                {errors.paymentMethod && (
+                  <p className="mt-1 text-[11px] text-danger flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {errors.paymentMethod}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -566,7 +742,8 @@ export default function NewTransactionPage() {
                 htmlFor={notesInputId}
                 className="block text-xs font-semibold text-dark mb-1.5"
               >
-                Catatan Khusus <span className="text-gray-400 font-normal">(Opsional)</span>
+                Catatan Khusus{" "}
+                <span className="text-gray-400 font-normal">(Opsional)</span>
               </label>
               <textarea
                 id={notesInputId}
@@ -616,7 +793,9 @@ export default function NewTransactionPage() {
                     <h3 className="text-xs font-bold uppercase tracking-wider text-dark">
                       Nota Transaksi
                     </h3>
-                    <span className="text-[10px] text-gray-400">Laundry Insight</span>
+                    <span className="text-[10px] text-gray-400">
+                      Laundry Insight
+                    </span>
                   </div>
                 </div>
                 <span className="font-mono text-[11px] font-bold text-primary">
@@ -649,6 +828,12 @@ export default function NewTransactionPage() {
                     {paymentStatus === "paid" ? "LUNAS" : "BELUM LUNAS"}
                   </span>
                 </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500">Metode Bayar:</span>
+                  <span className="font-semibold text-dark">
+                    {selectedPaymentMethod?.name || "-"}
+                  </span>
+                </div>
               </div>
 
               <div className="py-3 border-b border-dashed border-gray-200">
@@ -657,7 +842,9 @@ export default function NewTransactionPage() {
                 </div>
                 <div className="flex items-center justify-between text-xs">
                   <div>
-                    <p className="font-medium text-dark">{currentService?.name}</p>
+                    <p className="font-medium text-dark">
+                      {currentService?.name}
+                    </p>
                     <p className="text-[11px] text-gray-400">
                       {parsedQty} {currentService?.unit} x{" "}
                       {formatRupiah(currentService?.price || 0)}
