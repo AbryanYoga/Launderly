@@ -18,6 +18,7 @@ import {
   Clock,
   Sparkles,
   Crown,
+  CreditCard,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -56,6 +57,7 @@ interface TransactionRecord {
   createdAt: string;
   customerName: string;
   customerPhone: string;
+  paymentMethodName?: string;
 }
 
 const SKOTE_COLORS = ["#0284C7", "#34C38F", "#F1B44C", "#556EE6"];
@@ -110,33 +112,52 @@ const mockComposition: ServiceComposition[] = [
   { name: "Satuan Khusus", value: 6, color: "#F1B44C" },
 ];
 
+const mockCategoryComposition: ServiceComposition[] = [
+  { name: "Kiloan", value: 80, color: "#0284C7" },
+  { name: "Satuan", value: 14, color: "#34C38F" },
+  { name: "Setrika", value: 6, color: "#F1B44C" },
+];
+
+const mockPaymentComposition: ServiceComposition[] = [
+  { name: "Cash", value: 28, color: "#0284C7" },
+  { name: "QRIS", value: 22, color: "#34C38F" },
+  { name: "Transfer Bank", value: 14, color: "#F1B44C" },
+  { name: "E-Wallet", value: 6, color: "#556EE6" },
+];
+
 const sampleOperationalTransactions: TransactionRecord[] = [
-  { id: "1", invoice: "INV/260924/1001", totalWeight: 4.5, totalAmount: 36000, createdAt: "2026-09-21T08:30:00Z", customerName: "Ibu Rina Susanti", customerPhone: "081234567891" },
-  { id: "2", invoice: "INV/260924/1002", totalWeight: 3.0, totalAmount: 24000, createdAt: "2026-09-21T11:15:00Z", customerName: "Budi Santoso", customerPhone: "081234567892" },
-  { id: "3", invoice: "INV/260924/1003", totalWeight: 5.0, totalAmount: 40000, createdAt: "2026-09-21T17:45:00Z", customerName: "Ahmad Subagio", customerPhone: "081987654321" },
-  { id: "4", invoice: "INV/260924/1004", totalWeight: 2.0, totalAmount: 16000, createdAt: "2026-09-22T09:20:00Z", customerName: "Dewi Lestari", customerPhone: "081399887766" },
-  { id: "5", invoice: "INV/260924/1005", totalWeight: 4.0, totalAmount: 32000, createdAt: "2026-09-22T10:45:00Z", customerName: "Ibu Rina Susanti", customerPhone: "081234567891" },
-  { id: "6", invoice: "INV/260924/1006", totalWeight: 6.0, totalAmount: 50000, createdAt: "2026-09-22T14:10:00Z", customerName: "Siti Rahmawati", customerPhone: "085678901234" },
-  { id: "7", invoice: "INV/260924/1007", totalWeight: 2.5, totalAmount: 20000, createdAt: "2026-09-23T10:15:00Z", customerName: "Hendra Wijaya", customerPhone: "082144556677" },
-  { id: "8", invoice: "INV/260924/1008", totalWeight: 3.5, totalAmount: 28000, createdAt: "2026-09-23T11:50:00Z", customerName: "Budi Santoso", customerPhone: "081234567892" },
-  { id: "9", invoice: "INV/260924/1009", totalWeight: 5.5, totalAmount: 44000, createdAt: "2026-09-23T15:30:00Z", customerName: "Ibu Rina Susanti", customerPhone: "081234567891" },
-  { id: "10", invoice: "INV/260924/1010", totalWeight: 7.0, totalAmount: 60000, createdAt: "2026-09-24T10:05:00Z", customerName: "Ahmad Subagio", customerPhone: "081987654321" },
-  { id: "11", invoice: "INV/260924/1011", totalWeight: 3.0, totalAmount: 25000, createdAt: "2026-09-24T11:40:00Z", customerName: "Dewi Lestari", customerPhone: "081399887766" },
-  { id: "12", invoice: "INV/260924/1012", totalWeight: 4.0, totalAmount: 32000, createdAt: "2026-09-24T16:20:00Z", customerName: "Budi Santoso", customerPhone: "081234567892" },
-  { id: "13", invoice: "INV/260924/1013", totalWeight: 8.0, totalAmount: 68000, createdAt: "2026-09-24T18:10:00Z", customerName: "Ibu Rina Susanti", customerPhone: "081234567891" },
-  { id: "14", invoice: "INV/260924/1014", totalWeight: 5.0, totalAmount: 42000, createdAt: "2026-09-20T10:30:00Z", customerName: "Ahmad Subagio", customerPhone: "081987654321" },
-  { id: "15", invoice: "INV/260924/1015", totalWeight: 2.5, totalAmount: 20000, createdAt: "2026-09-20T11:20:00Z", customerName: "Fitri Handayani", customerPhone: "081277889900" },
-  { id: "16", invoice: "INV/260924/1016", totalWeight: 6.5, totalAmount: 52000, createdAt: "2026-09-20T14:40:00Z", customerName: "Budi Santoso", customerPhone: "081234567892" },
-  { id: "17", invoice: "INV/260924/1017", totalWeight: 4.0, totalAmount: 35000, createdAt: "2026-09-19T09:00:00Z", customerName: "Siti Rahmawati", customerPhone: "085678901234" },
-  { id: "18", invoice: "INV/260924/1018", totalWeight: 3.5, totalAmount: 30000, createdAt: "2026-09-19T11:00:00Z", customerName: "Dewi Lestari", customerPhone: "081399887766" },
-  { id: "19", invoice: "INV/260924/1019", totalWeight: 5.0, totalAmount: 40000, createdAt: "2026-09-19T17:10:00Z", customerName: "Ibu Rina Susanti", customerPhone: "081234567891" },
+  { id: "1", invoice: "INV/260924/1001", totalWeight: 4.5, totalAmount: 36000, createdAt: "2026-09-21T08:30:00Z", customerName: "Ibu Rina Susanti", customerPhone: "081234567891", paymentMethodName: "Cash" },
+  { id: "2", invoice: "INV/260924/1002", totalWeight: 3.0, totalAmount: 24000, createdAt: "2026-09-21T11:15:00Z", customerName: "Budi Santoso", customerPhone: "081234567892", paymentMethodName: "QRIS" },
+  { id: "3", invoice: "INV/260924/1003", totalWeight: 5.0, totalAmount: 40000, createdAt: "2026-09-21T17:45:00Z", customerName: "Ahmad Subagio", customerPhone: "081987654321", paymentMethodName: "Cash" },
+  { id: "4", invoice: "INV/260924/1004", totalWeight: 2.0, totalAmount: 16000, createdAt: "2026-09-22T09:20:00Z", customerName: "Dewi Lestari", customerPhone: "081399887766", paymentMethodName: "Transfer Bank" },
+  { id: "5", invoice: "INV/260924/1005", totalWeight: 4.0, totalAmount: 32000, createdAt: "2026-09-22T10:45:00Z", customerName: "Ibu Rina Susanti", customerPhone: "081234567891", paymentMethodName: "QRIS" },
+  { id: "6", invoice: "INV/260924/1006", totalWeight: 6.0, totalAmount: 50000, createdAt: "2026-09-22T14:10:00Z", customerName: "Siti Rahmawati", customerPhone: "085678901234", paymentMethodName: "Cash" },
+  { id: "7", invoice: "INV/260924/1007", totalWeight: 2.5, totalAmount: 20000, createdAt: "2026-09-23T10:15:00Z", customerName: "Hendra Wijaya", customerPhone: "082144556677", paymentMethodName: "E-Wallet" },
+  { id: "8", invoice: "INV/260924/1008", totalWeight: 3.5, totalAmount: 28000, createdAt: "2026-09-23T11:50:00Z", customerName: "Budi Santoso", customerPhone: "081234567892", paymentMethodName: "Cash" },
+  { id: "9", invoice: "INV/260924/1009", totalWeight: 5.5, totalAmount: 44000, createdAt: "2026-09-23T15:30:00Z", customerName: "Ibu Rina Susanti", customerPhone: "081234567891", paymentMethodName: "QRIS" },
+  { id: "10", invoice: "INV/260924/1010", totalWeight: 7.0, totalAmount: 60000, createdAt: "2026-09-24T10:05:00Z", customerName: "Ahmad Subagio", customerPhone: "081987654321", paymentMethodName: "Cash" },
+  { id: "11", invoice: "INV/260924/1011", totalWeight: 3.0, totalAmount: 25000, createdAt: "2026-09-24T11:40:00Z", customerName: "Dewi Lestari", customerPhone: "081399887766", paymentMethodName: "Transfer Bank" },
+  { id: "12", invoice: "INV/260924/1012", totalWeight: 4.0, totalAmount: 32000, createdAt: "2026-09-24T16:20:00Z", customerName: "Budi Santoso", customerPhone: "081234567892", paymentMethodName: "QRIS" },
+  { id: "13", invoice: "INV/260924/1013", totalWeight: 8.0, totalAmount: 68000, createdAt: "2026-09-24T18:10:00Z", customerName: "Ibu Rina Susanti", customerPhone: "081234567891", paymentMethodName: "Cash" },
+  { id: "14", invoice: "INV/260924/1014", totalWeight: 5.0, totalAmount: 42000, createdAt: "2026-09-20T10:30:00Z", customerName: "Ahmad Subagio", customerPhone: "081987654321", paymentMethodName: "Transfer Bank" },
+  { id: "15", invoice: "INV/260924/1015", totalWeight: 2.5, totalAmount: 20000, createdAt: "2026-09-20T11:20:00Z", customerName: "Fitri Handayani", customerPhone: "081277889900", paymentMethodName: "E-Wallet" },
+  { id: "16", invoice: "INV/260924/1016", totalWeight: 6.5, totalAmount: 52000, createdAt: "2026-09-20T14:40:00Z", customerName: "Budi Santoso", customerPhone: "081234567892", paymentMethodName: "Cash" },
+  { id: "17", invoice: "INV/260924/1017", totalWeight: 4.0, totalAmount: 35000, createdAt: "2026-09-19T09:00:00Z", customerName: "Siti Rahmawati", customerPhone: "085678901234", paymentMethodName: "QRIS" },
+  { id: "18", invoice: "INV/260924/1018", totalWeight: 3.5, totalAmount: 30000, createdAt: "2026-09-19T11:00:00Z", customerName: "Dewi Lestari", customerPhone: "081399887766", paymentMethodName: "Cash" },
+  { id: "19", invoice: "INV/260924/1019", totalWeight: 5.0, totalAmount: 40000, createdAt: "2026-09-19T17:10:00Z", customerName: "Ibu Rina Susanti", customerPhone: "081234567891", paymentMethodName: "QRIS" },
 ];
 
 export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
   const [revenueData, setRevenueData] = useState<RevenuePoint[]>(mock7DaysRevenue);
+  const [serviceViewMode, setServiceViewMode] = useState<"service" | "category">("service");
   const [compositionData, setCompositionData] =
     useState<ServiceComposition[]>(mockComposition);
+  const [categoryCompositionData, setCategoryCompositionData] =
+    useState<ServiceComposition[]>(mockCategoryComposition);
+  const [paymentCompositionData, setPaymentCompositionData] =
+    useState<ServiceComposition[]>(mockPaymentComposition);
+
   const [allTransactions, setAllTransactions] = useState<TransactionRecord[]>(
     sampleOperationalTransactions
   );
@@ -155,35 +176,64 @@ export default function AnalyticsPage() {
       startDate.setHours(0, 0, 0, 0);
     }
 
-    const { data: transactions } = await supabase
-      .from("transactions")
-      .select(`
-        id,
-        invoice,
-        total_amount,
-        total_weight,
-        created_at,
-        customers (
-          name,
-          phone
-        )
-      `)
-      .gte("created_at", startDate.toISOString())
-      .order("created_at", { ascending: true });
+    const [txRes, itemsRes, servicesRes, categoriesRes, paymentMethodsRes] =
+      await Promise.all([
+        supabase
+          .from("transactions")
+          .select(`
+            id,
+            invoice,
+            total_amount,
+            total_weight,
+            created_at,
+            payment_method_id,
+            customers (
+              name,
+              phone
+            )
+          `)
+          .gte("created_at", startDate.toISOString())
+          .order("created_at", { ascending: true }),
 
-    const { data: items } = await supabase
-      .from("transaction_items")
-      .select(`
-        qty,
-        subtotal,
-        services (
-          name,
-          unit
-        )
-      `);
+        supabase
+          .from("transaction_items")
+          .select(`
+            qty,
+            subtotal,
+            service_id,
+            services (
+              id,
+              name,
+              unit,
+              category_id
+            )
+          `),
+
+        supabase.from("services").select("id, name, category_id"),
+        supabase.from("categories").select("id, name"),
+        supabase.from("payment_methods").select("id, name"),
+      ]);
+
+    const transactions = txRes.data;
+    const items = itemsRes.data;
+
+    const pmMap = new Map<string, string>();
+    paymentMethodsRes.data?.forEach((pm) => pmMap.set(pm.id, pm.name));
+
+    const catMap = new Map<string, string>();
+    categoriesRes.data?.forEach((c) => catMap.set(c.id, c.name));
+
+    const servMap = new Map<
+      string,
+      { name: string; category_id?: string | null }
+    >();
+    servicesRes.data?.forEach((s) =>
+      servMap.set(s.id, { name: s.name, category_id: s.category_id })
+    );
 
     let points: RevenuePoint[] = [];
     let records: TransactionRecord[] = [];
+    let paymentComp: ServiceComposition[] = [];
 
     if (transactions && transactions.length >= 2) {
       interface RawCustomer {
@@ -196,11 +246,14 @@ export default function AnalyticsPage() {
         total_amount: number;
         total_weight: number;
         created_at: string;
+        payment_method_id?: string | null;
         customers?: RawCustomer | RawCustomer[];
       }
 
       records = (transactions as unknown as RawTx[]).map((t) => {
         const c = Array.isArray(t.customers) ? t.customers[0] : t.customers;
+        const pmName =
+          (t.payment_method_id && pmMap.get(t.payment_method_id)) || "Cash";
         return {
           id: t.id,
           invoice: t.invoice,
@@ -209,10 +262,13 @@ export default function AnalyticsPage() {
           createdAt: t.created_at,
           customerName: c?.name || "Pelanggan",
           customerPhone: c?.phone || "-",
+          paymentMethodName: pmName,
         };
       });
 
       const grouped: Record<string, { omzet: number; pesanan: number }> = {};
+      const payCounts: Record<string, number> = {};
+
       transactions.forEach((tx) => {
         const d = new Date(tx.created_at);
         const key = new Intl.DateTimeFormat("id-ID", {
@@ -225,6 +281,10 @@ export default function AnalyticsPage() {
         }
         grouped[key].omzet += Number(tx.total_amount) || 0;
         grouped[key].pesanan += 1;
+
+        const pmName =
+          (tx.payment_method_id && pmMap.get(tx.payment_method_id)) || "Cash";
+        payCounts[pmName] = (payCounts[pmName] || 0) + 1;
       });
 
       points = Object.keys(grouped).map((k) => ({
@@ -232,31 +292,52 @@ export default function AnalyticsPage() {
         omzet: grouped[k].omzet,
         pesanan: grouped[k].pesanan,
       }));
+
+      paymentComp = Object.keys(payCounts).map((k, idx) => ({
+        name: k,
+        value: payCounts[k],
+        color: SKOTE_COLORS[idx % SKOTE_COLORS.length],
+      }));
     } else {
       if (range === "7d") points = mock7DaysRevenue;
       else if (range === "30d") points = mock30DaysRevenue;
       else points = mockMonthRevenue;
 
       records = sampleOperationalTransactions;
+      paymentComp = mockPaymentComposition;
     }
 
     let comp: ServiceComposition[] = [];
+    let catComp: ServiceComposition[] = [];
+
     if (items && items.length > 0) {
       interface RawItemService {
+        id?: string;
         name?: string;
         unit?: string;
+        category_id?: string | null;
       }
       interface RawItemRow {
         qty: number;
         subtotal: number;
+        service_id?: string;
         services?: RawItemService | RawItemService[];
       }
       const counts: Record<string, number> = {};
+      const categoryCounts: Record<string, number> = {};
 
       (items as unknown as RawItemRow[]).forEach((it) => {
         const s = Array.isArray(it.services) ? it.services[0] : it.services;
-        const sName = s?.name || "Lainnya";
-        counts[sName] = (counts[sName] || 0) + (Number(it.qty) || 1);
+        const servInfo = (s?.id || it.service_id)
+          ? servMap.get(s?.id || it.service_id || "")
+          : null;
+        const sName = s?.name || servInfo?.name || "Lainnya";
+        const catId = s?.category_id || servInfo?.category_id;
+        const catName = (catId && catMap.get(catId)) || "Lainnya";
+
+        const volume = Number(it.qty) || 1;
+        counts[sName] = (counts[sName] || 0) + volume;
+        categoryCounts[catName] = (categoryCounts[catName] || 0) + volume;
       });
 
       comp = Object.keys(counts).map((k, idx) => ({
@@ -264,11 +345,22 @@ export default function AnalyticsPage() {
         value: counts[k],
         color: SKOTE_COLORS[idx % SKOTE_COLORS.length],
       }));
+
+      catComp = Object.keys(categoryCounts).map((k, idx) => ({
+        name: k,
+        value: categoryCounts[k],
+        color: SKOTE_COLORS[idx % SKOTE_COLORS.length],
+      }));
     } else {
       comp = mockComposition;
+      catComp = mockCategoryComposition;
     }
 
-    return { points, comp, records };
+    if (paymentComp.length === 0) {
+      paymentComp = mockPaymentComposition;
+    }
+
+    return { points, comp, catComp, paymentComp, records };
   };
 
   useEffect(() => {
@@ -276,10 +368,13 @@ export default function AnalyticsPage() {
 
     async function load() {
       try {
-        const { points, comp, records } = await queryAnalytics(timeRange);
+        const { points, comp, catComp, paymentComp, records } =
+          await queryAnalytics(timeRange);
         if (isMounted) {
           setRevenueData(points);
           setCompositionData(comp);
+          setCategoryCompositionData(catComp);
+          setPaymentCompositionData(paymentComp);
           setAllTransactions(records);
         }
       } catch {
@@ -288,6 +383,8 @@ export default function AnalyticsPage() {
           else if (timeRange === "30d") setRevenueData(mock30DaysRevenue);
           else setRevenueData(mockMonthRevenue);
           setCompositionData(mockComposition);
+          setCategoryCompositionData(mockCategoryComposition);
+          setPaymentCompositionData(mockPaymentComposition);
           setAllTransactions(sampleOperationalTransactions);
         }
       } finally {
@@ -312,9 +409,12 @@ export default function AnalyticsPage() {
   const handleRefresh = async () => {
     setIsLoading(true);
     try {
-      const { points, comp, records } = await queryAnalytics(timeRange);
+      const { points, comp, catComp, paymentComp, records } =
+        await queryAnalytics(timeRange);
       setRevenueData(points);
       setCompositionData(comp);
+      setCategoryCompositionData(catComp);
+      setPaymentCompositionData(paymentComp);
       setAllTransactions(records);
     } catch {
       // Fallback
@@ -337,6 +437,12 @@ export default function AnalyticsPage() {
     if (compositionData.length === 0) return "-";
     return [...compositionData].sort((a, b) => b.value - a.value)[0].name;
   }, [compositionData]);
+
+  const activeCompositionData = useMemo(() => {
+    return serviceViewMode === "service"
+      ? compositionData
+      : categoryCompositionData;
+  }, [serviceViewMode, compositionData, categoryCompositionData]);
 
   const peakMatrix = useMemo(() => {
     const initialGrid = DAYS.map(() => TIME_SLOTS.map(() => 0));
@@ -491,7 +597,7 @@ export default function AnalyticsPage() {
             <h1 className="text-xl font-bold text-dark">Analitik & Laporan</h1>
           </div>
           <p className="text-xs text-gray-500">
-            Visualisasi tren pendapatan, retensi pelanggan, dan matriks operasional jam ramai
+            Visualisasi tren pendapatan, retensi pelanggan, komposisi metode bayar, dan operasional jam ramai
           </p>
         </div>
 
@@ -596,123 +702,154 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-8 rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between pb-4 mb-4 border-b border-gray-100">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <BarChart3 className="h-4 w-4" />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold text-dark">
-                  Grafik Tren Pendapatan
-                </h2>
-                <p className="text-xs text-gray-400">
-                  Total omzet harian/mingguan dalam rentang waktu yang dipilih
-                </p>
-              </div>
+      {/* Row 1: Area Chart Tren Pendapatan */}
+      <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between pb-4 mb-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <BarChart3 className="h-4 w-4" />
             </div>
-            <span className="text-xs font-semibold text-primary bg-primary/10 px-2.5 py-1 rounded-full">
-              Area Chart
-            </span>
+            <div>
+              <h2 className="text-sm font-bold text-dark">
+                Grafik Tren Pendapatan
+              </h2>
+              <p className="text-xs text-gray-400">
+                Total omzet harian/mingguan dalam rentang waktu yang dipilih
+              </p>
+            </div>
           </div>
-
-          <div className="h-[300px] w-full">
-            {isLoading ? (
-              <div className="h-full w-full flex items-center justify-center text-xs text-gray-400">
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent mr-2"></div>
-                Memuat visualisasi grafik...
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={revenueData}
-                  margin={{ top: 10, right: 10, left: 10, bottom: 0 }}
-                >
-                  <defs>
-                    <linearGradient id="omzetGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#0284C7" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#0284C7" stopOpacity={0.0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f1" vertical={false} />
-                  <XAxis
-                    dataKey="date"
-                    stroke="#94a3b8"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={{ stroke: "#e2e8f0" }}
-                  />
-                  <YAxis
-                    stroke="#94a3b8"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v) =>
-                      v >= 1000000
-                        ? `${(v / 1000000).toFixed(1)}M`
-                        : v >= 1000
-                        ? `${(v / 1000).toFixed(0)}k`
-                        : `${v}`
-                    }
-                  />
-                  <Tooltip
-                    formatter={(val) => [formatRupiah(Number(val) || 0), "Omzet"]}
-                    contentStyle={{
-                      backgroundColor: "#2A3042",
-                      border: "none",
-                      borderRadius: "8px",
-                      color: "#fff",
-                      fontSize: "12px",
-                      boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                    }}
-                    labelStyle={{ color: "#a6b0cf", fontWeight: 600, marginBottom: "4px" }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="omzet"
-                    stroke="#0284C7"
-                    strokeWidth={2.5}
-                    fillOpacity={1}
-                    fill="url(#omzetGradient)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            )}
-          </div>
+          <span className="text-xs font-semibold text-primary bg-primary/10 px-2.5 py-1 rounded-full">
+            Area Chart
+          </span>
         </div>
 
-        <div className="lg:col-span-4 rounded-xl border border-gray-100 bg-white p-6 shadow-sm flex flex-col">
-          <div className="flex items-center justify-between pb-4 mb-2 border-b border-gray-100">
+        <div className="h-[300px] w-full">
+          {isLoading ? (
+            <div className="h-full w-full flex items-center justify-center text-xs text-gray-400">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent mr-2"></div>
+              Memuat visualisasi grafik...
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart
+                data={revenueData}
+                margin={{ top: 10, right: 10, left: 10, bottom: 0 }}
+              >
+                <defs>
+                  <linearGradient id="omzetGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#0284C7" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#0284C7" stopOpacity={0.0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f1" vertical={false} />
+                <XAxis
+                  dataKey="date"
+                  stroke="#94a3b8"
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={{ stroke: "#e2e8f0" }}
+                />
+                <YAxis
+                  stroke="#94a3b8"
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v) =>
+                    v >= 1000000
+                      ? `${(v / 1000000).toFixed(1)}M`
+                      : v >= 1000
+                      ? `${(v / 1000).toFixed(0)}k`
+                      : `${v}`
+                  }
+                />
+                <Tooltip
+                  formatter={(val) => [formatRupiah(Number(val) || 0), "Omzet"]}
+                  contentStyle={{
+                    backgroundColor: "#2A3042",
+                    border: "none",
+                    borderRadius: "8px",
+                    color: "#fff",
+                    fontSize: "12px",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                  }}
+                  labelStyle={{ color: "#a6b0cf", fontWeight: 600, marginBottom: "4px" }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="omzet"
+                  stroke="#0284C7"
+                  strokeWidth={2.5}
+                  fillOpacity={1}
+                  fill="url(#omzetGradient)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      {/* Row 2: Dua Donut Charts (Komposisi Layanan/Kategori & Komposisi Metode Pembayaran) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Komposisi Layanan / Kategori */}
+        <div className="lg:col-span-6 rounded-xl border border-gray-100 bg-white p-6 shadow-sm flex flex-col">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-2 border-b border-gray-100 gap-2">
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/10 text-success">
                 <PieIcon className="h-4 w-4" />
               </div>
               <div>
                 <h2 className="text-sm font-bold text-dark">
-                  Komposisi Layanan
+                  Grafik Komposisi Layanan
                 </h2>
                 <p className="text-xs text-gray-400">
-                  Proporsi beban pengerjaan
+                  {serviceViewMode === "service"
+                    ? "Proporsi beban per jenis layanan"
+                    : "Proporsi beban per kategori layanan"}
                 </p>
               </div>
             </div>
-            <span className="text-xs font-semibold text-success bg-success/10 px-2.5 py-1 rounded-full">
-              Donut
-            </span>
+
+            <div className="flex items-center gap-1 bg-[#F8F9FA] p-0.5 rounded-lg border border-gray-200 self-start sm:self-auto text-xs">
+              <button
+                type="button"
+                onClick={() => setServiceViewMode("service")}
+                className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
+                  serviceViewMode === "service"
+                    ? "bg-dark text-white shadow-2xs"
+                    : "text-gray-500 hover:text-dark"
+                }`}
+              >
+                Per Layanan
+              </button>
+              <button
+                type="button"
+                onClick={() => setServiceViewMode("category")}
+                className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
+                  serviceViewMode === "category"
+                    ? "bg-dark text-white shadow-2xs"
+                    : "text-gray-500 hover:text-dark"
+                }`}
+              >
+                Per Kategori
+              </button>
+            </div>
           </div>
 
-          <div className="h-[250px] w-full flex-1">
+          <div className="h-[260px] w-full flex-1">
             {isLoading ? (
               <div className="h-full w-full flex items-center justify-center text-xs text-gray-400">
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-success border-t-transparent mr-2"></div>
                 Menghitung porsi...
               </div>
+            ) : activeCompositionData.length === 0 ? (
+              <div className="h-full w-full flex items-center justify-center text-xs text-gray-400">
+                Belum ada data layanan
+              </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={compositionData}
+                    data={activeCompositionData}
                     cx="50%"
                     cy="50%"
                     innerRadius={50}
@@ -720,9 +857,9 @@ export default function AnalyticsPage() {
                     paddingAngle={3}
                     dataKey="value"
                   >
-                    {compositionData.map((entry, index) => (
+                    {activeCompositionData.map((entry, index) => (
                       <Cell
-                        key={`cell-${index}`}
+                        key={`cell-service-${index}`}
                         fill={entry.color || SKOTE_COLORS[index % SKOTE_COLORS.length]}
                       />
                     ))}
@@ -748,8 +885,81 @@ export default function AnalyticsPage() {
             )}
           </div>
         </div>
+
+        {/* Komposisi Metode Pembayaran */}
+        <div className="lg:col-span-6 rounded-xl border border-gray-100 bg-white p-6 shadow-sm flex flex-col">
+          <div className="flex items-center justify-between pb-4 mb-2 border-b border-gray-100">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <CreditCard className="h-4 w-4" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-dark">
+                  Komposisi Metode Pembayaran
+                </h2>
+                <p className="text-xs text-gray-400">
+                  Proporsi frekuensi channel pembayaran yang digunakan
+                </p>
+              </div>
+            </div>
+            <span className="text-xs font-semibold text-primary bg-primary/10 px-2.5 py-1 rounded-full">
+              Donut
+            </span>
+          </div>
+
+          <div className="h-[260px] w-full flex-1">
+            {isLoading ? (
+              <div className="h-full w-full flex items-center justify-center text-xs text-gray-400">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent mr-2"></div>
+                Menghitung channel...
+              </div>
+            ) : paymentCompositionData.length === 0 ? (
+              <div className="h-full w-full flex items-center justify-center text-xs text-gray-400">
+                Belum ada data pembayaran
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={paymentCompositionData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={80}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {paymentCompositionData.map((entry, index) => (
+                      <Cell
+                        key={`cell-payment-${index}`}
+                        fill={entry.color || SKOTE_COLORS[index % SKOTE_COLORS.length]}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(val) => [`${val} Transaksi`, "Frekuensi"]}
+                    contentStyle={{
+                      backgroundColor: "#2A3042",
+                      border: "none",
+                      borderRadius: "8px",
+                      color: "#fff",
+                      fontSize: "12px",
+                    }}
+                  />
+                  <Legend
+                    verticalAlign="bottom"
+                    iconType="circle"
+                    iconSize={8}
+                    wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
       </div>
 
+      {/* Row 3: Metrik Retensi & Top 5 Pelanggan Loyal */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-6 rounded-xl border border-gray-100 bg-white p-6 shadow-sm flex flex-col justify-between">
           <div>
@@ -909,6 +1119,7 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
+      {/* Row 4: Matriks Jam Ramai */}
       <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-4 border-b border-gray-100 gap-3">
           <div className="flex items-center gap-2">
