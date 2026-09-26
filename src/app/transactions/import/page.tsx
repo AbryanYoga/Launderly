@@ -19,6 +19,7 @@ import {
   Filter,
 } from "lucide-react";
 import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { supabase } from "@/lib/supabase/client";
 import type { Service, PaymentMethod, Category } from "@/types";
 
@@ -81,6 +82,7 @@ export default function ImportTransactionsPage() {
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
   const [filterTab, setFilterTab] = useState<"all" | "valid" | "invalid">("all");
   const [paymentMethods, setPaymentMethods] =
     useState<PaymentMethod[]>(defaultPaymentMethods);
@@ -137,38 +139,125 @@ export default function ImportTransactionsPage() {
     }).format(val);
   };
 
-  const handleDownloadTemplate = () => {
-    const headers = [
-      [
-        "Nama Pelanggan",
-        "Nomor HP",
-        "Kategori",
-        "Layanan",
-        "Berat",
-        "Total",
-        "Tanggal",
-        "Status Bayar",
-        "Metode Pembayaran",
-      ],
-    ];
+  const handleDownloadTemplate = async () => {
+    setIsDownloadingTemplate(true);
+    try {
+      const [categoriesRes, servicesRes, paymentsRes] = await Promise.all([
+        supabase
+          .from("categories")
+          .select("name")
+          .eq("is_active", true)
+          .order("name", { ascending: true }),
+        supabase
+          .from("services")
+          .select("name")
+          .eq("is_active", true)
+          .order("name", { ascending: true }),
+        supabase
+          .from("payment_methods")
+          .select("name")
+          .eq("is_active", true)
+          .order("created_at", { ascending: true }),
+      ]);
 
-    const worksheet = XLSX.utils.aoa_to_sheet(headers);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Template Transaksi");
+      const categoriesList = (categoriesRes.data || [])
+        .map((c: { name: string }) => c.name.trim())
+        .filter(Boolean);
+      const servicesList = (servicesRes.data || [])
+        .map((s: { name: string }) => s.name.trim())
+        .filter(Boolean);
+      const paymentsList = (paymentsRes.data || [])
+        .map((p: { name: string }) => p.name.trim())
+        .filter(Boolean);
+      const statusBayarList = ["Lunas", "Belum Lunas"];
 
-    worksheet["!cols"] = [
-      { wch: 22 }, // Nama Pelanggan
-      { wch: 18 }, // Nomor HP
-      { wch: 16 }, // Kategori
-      { wch: 18 }, // Layanan
-      { wch: 10 }, // Berat
-      { wch: 14 }, // Total
-      { wch: 14 }, // Tanggal
-      { wch: 16 }, // Status Bayar
-      { wch: 20 }, // Metode Pembayaran
-    ];
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Template Transaksi");
 
-    XLSX.writeFile(workbook, "template_transaksi_laundry.xlsx");
+      worksheet.columns = [
+        { header: "Nama Pelanggan", key: "nama", width: 22 },
+        { header: "Nomor HP", key: "hp", width: 18 },
+        { header: "Kategori", key: "kategori", width: 16 },
+        { header: "Layanan", key: "layanan", width: 18 },
+        { header: "Berat", key: "berat", width: 10 },
+        { header: "Total", key: "total", width: 14 },
+        { header: "Tanggal", key: "tanggal", width: 14 },
+        { header: "Status Bayar", key: "status_bayar", width: 16 },
+        { header: "Metode Pembayaran", key: "metode_bayar", width: 20 },
+      ];
+
+      // Make header row bold
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true };
+
+      const categoryValidation =
+        categoriesList.length > 0
+          ? {
+              type: "list" as const,
+              allowBlank: true,
+              formulae: [`"${categoriesList.join(",")}"`],
+            }
+          : null;
+
+      const serviceValidation =
+        servicesList.length > 0
+          ? {
+              type: "list" as const,
+              allowBlank: true,
+              formulae: [`"${servicesList.join(",")}"`],
+            }
+          : null;
+
+      const statusValidation = {
+        type: "list" as const,
+        allowBlank: true,
+        formulae: [`"${statusBayarList.join(",")}"`],
+      };
+
+      const paymentValidation =
+        paymentsList.length > 0
+          ? {
+              type: "list" as const,
+              allowBlank: true,
+              formulae: [`"${paymentsList.join(",")}"`],
+            }
+          : null;
+
+      for (let r = 2; r <= 500; r++) {
+        const row = worksheet.getRow(r);
+        if (categoryValidation) {
+          row.getCell(3).dataValidation = categoryValidation;
+        }
+        if (serviceValidation) {
+          row.getCell(4).dataValidation = serviceValidation;
+        }
+        if (statusValidation) {
+          row.getCell(8).dataValidation = statusValidation;
+        }
+        if (paymentValidation) {
+          row.getCell(9).dataValidation = paymentValidation;
+        }
+      }
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "template_transaksi_laundry.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Gagal mengunduh template.";
+      setErrorMessage(`Gagal men-generate template: ${msg}`);
+    } finally {
+      setIsDownloadingTemplate(false);
+    }
   };
 
   const parseFile = (file: File) => {
@@ -642,10 +731,20 @@ export default function ImportTransactionsPage() {
         <button
           type="button"
           onClick={handleDownloadTemplate}
-          className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-xs font-semibold text-dark shadow-xs hover:bg-gray-50 hover:border-primary/40 transition-all self-start sm:self-auto"
+          disabled={isDownloadingTemplate}
+          className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-xs font-semibold text-dark shadow-xs hover:bg-gray-50 hover:border-primary/40 disabled:opacity-50 transition-all self-start sm:self-auto"
         >
-          <Download className="h-4 w-4 text-primary" />
-          Unduh Template Excel
+          {isDownloadingTemplate ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span>Menyiapkan Template...</span>
+            </>
+          ) : (
+            <>
+              <Download className="h-4 w-4 text-primary" />
+              <span>Unduh Template Excel</span>
+            </>
+          )}
         </button>
       </div>
 
