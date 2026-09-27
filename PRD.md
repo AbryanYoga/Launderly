@@ -141,6 +141,19 @@ Platform berbasis web untuk manajemen operasional dan analitik bisnis laundry. S
   - **Insert Transaksi Atomik (RPC)**: Fungsi PostgreSQL `create_transaction_with_item` (PL/pgSQL) untuk menjamin persistensi data `transactions` dan `transaction_items` dalam satu transaksi DB yang aman dari inkonsistensi (*atomic commit*).
   - **Invoice Uniqueness Handling**: Pengecekan collision dan retry loop otomatis bila kode nota terduplikasi pada lonjakan transaksi konkuren.
 
+### 4.8. Kustomisasi Harga per Transaksi
+- **Override Harga Fleksibel (`/transactions/new`)**:
+  - Field "Harga per Unit" pada form transaksi manual otomatis terisi dari harga master layanan (`services.price`), namun dapat diedit/di-override manual oleh kasir untuk transaksi individual tanpa mengubah harga master di tabel `services`.
+- **Indikator Visual & Opsi Reset**:
+  - Indikator visual dinamis (teks badge warna oranye/kuning) muncul otomatis hanya saat nilai harga di-custom (berbeda dari harga master layanan terpilih).
+  - Tombol aksi cepat "Reset ke Harga Asli" di samping input harga untuk mengembalikan nilai ke tarif master dengan sekali klik.
+  - Otomatis me-reset nilai field harga mengikuti tarif master layanan baru saat pengguna mengganti pilihan layanan.
+- **Konsistensi Subtotal, Nota & Histori Harga**:
+  - Perhitungan subtotal, grand total transaksi, serta rincian item pada kartu pratinjau nota cetak mengikuti harga custom yang dipakai saat transaksi tersebut dibuat, bukan harga master saat ini.
+  - Mendukung integritas histori pembukuan yang akurat meskipun tarif master layanan diubah di kemudian hari.
+- **Validasi Input**:
+  - Validasi ketat bahwa harga custom wajib berupa angka numerik positif dan harus lebih besar dari nol.
+
 ## 5. Coding & Commit Guidelines
 - Menulis kode modular, bersih, dan langsung ke fungsi teknis.
 - Tanpa komentar instruksional yang berlebihan di dalam baris kode.
