@@ -147,6 +147,9 @@ export default function NewTransactionPage() {
   const [selectedServiceId, setSelectedServiceId] = useState<string>(
     defaultServices[0].id
   );
+  const [unitPrice, setUnitPrice] = useState<string>(
+    String(defaultServices[0].price)
+  );
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] =
     useState<string>("");
   const [customerName, setCustomerName] = useState("");
@@ -161,6 +164,7 @@ export default function NewTransactionPage() {
     name?: string;
     phone?: string;
     qty?: string;
+    unitPrice?: string;
     paymentMethod?: string;
   }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -171,6 +175,7 @@ export default function NewTransactionPage() {
   const nameInputId = useId();
   const phoneInputId = useId();
   const serviceSelectId = useId();
+  const unitPriceInputId = useId();
   const paymentMethodSelectId = useId();
   const qtyInputId = useId();
   const notesInputId = useId();
@@ -206,6 +211,7 @@ export default function NewTransactionPage() {
         if (servicesRes.data && servicesRes.data.length > 0) {
           setServices(servicesRes.data as Service[]);
           setSelectedServiceId(servicesRes.data[0].id);
+          setUnitPrice(String(servicesRes.data[0].price));
         }
       } catch {
         // Fallback to default data
@@ -226,8 +232,13 @@ export default function NewTransactionPage() {
     (pm) => pm.id === selectedPaymentMethodId
   );
   const parsedQty = Math.max(0, parseFloat(qty) || 0);
-  const subtotal = parsedQty * (currentService ? currentService.price : 0);
+  const parsedUnitPrice = Math.max(0, parseFloat(unitPrice) || 0);
+  const subtotal = parsedQty * parsedUnitPrice;
   const grandTotal = subtotal;
+  const isPriceCustomized =
+    currentService !== undefined &&
+    !isNaN(parseFloat(unitPrice)) &&
+    parseFloat(unitPrice) !== currentService.price;
   const estimatedDate = getEstimatedCompletion();
 
   // Group services by category
@@ -247,6 +258,7 @@ export default function NewTransactionPage() {
       name?: string;
       phone?: string;
       qty?: string;
+      unitPrice?: string;
       paymentMethod?: string;
     } = {};
 
@@ -262,6 +274,14 @@ export default function NewTransactionPage() {
 
     if (!qty || parseFloat(qty) <= 0 || isNaN(parseFloat(qty))) {
       errs.qty = "Jumlah atau berat harus lebih besar dari 0";
+    }
+
+    if (
+      !unitPrice ||
+      isNaN(parseFloat(unitPrice)) ||
+      parseFloat(unitPrice) <= 0
+    ) {
+      errs.unitPrice = "Harga per unit harus lebih besar dari 0";
     }
 
     if (!selectedPaymentMethodId) {
@@ -389,6 +409,9 @@ export default function NewTransactionPage() {
     setNotes("");
     setPaymentStatus("unpaid");
     setSelectedPaymentMethodId("");
+    const initialService = services[0] || defaultServices[0];
+    setSelectedServiceId(initialService.id);
+    setUnitPrice(String(initialService.price));
     setInvoiceNumber(generateInvoice());
     setErrors({});
     setIsSuccess(false);
@@ -590,7 +613,20 @@ export default function NewTransactionPage() {
                 <select
                   id={serviceSelectId}
                   value={selectedServiceId}
-                  onChange={(e) => setSelectedServiceId(e.target.value)}
+                  onChange={(e) => {
+                    const newId = e.target.value;
+                    setSelectedServiceId(newId);
+                    const newServ = services.find((s) => s.id === newId);
+                    if (newServ) {
+                      setUnitPrice(String(newServ.price));
+                      if (errors.unitPrice) {
+                        setErrors((prev) => ({
+                          ...prev,
+                          unitPrice: undefined,
+                        }));
+                      }
+                    }
+                  }}
                   className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-dark focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all font-medium"
                 >
                   {servicesWithCategory.map((group) => (
@@ -617,6 +653,84 @@ export default function NewTransactionPage() {
                 </select>
               </div>
 
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label
+                    htmlFor={unitPriceInputId}
+                    className="block text-xs font-semibold text-dark"
+                  >
+                    Harga per Unit <span className="text-danger">*</span>
+                  </label>
+                  {isPriceCustomized && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (currentService) {
+                          setUnitPrice(String(currentService.price));
+                          if (errors.unitPrice) {
+                            setErrors((prev) => ({
+                              ...prev,
+                              unitPrice: undefined,
+                            }));
+                          }
+                        }
+                      }}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary/80 transition-colors cursor-pointer"
+                      title="Kembalikan ke tarif standar master layanan"
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      Reset ke Harga Asli
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-400 select-none">
+                    Rp
+                  </span>
+                  <input
+                    id={unitPriceInputId}
+                    type="number"
+                    min="1"
+                    step="500"
+                    value={unitPrice}
+                    onChange={(e) => {
+                      setUnitPrice(e.target.value);
+                      if (errors.unitPrice) {
+                        setErrors((prev) => ({
+                          ...prev,
+                          unitPrice: undefined,
+                        }));
+                      }
+                    }}
+                    placeholder="Contoh: 8000"
+                    className={`w-full rounded-lg border pl-9 pr-14 py-2 text-xs text-dark placeholder-gray-400 focus:outline-none focus:ring-1 transition-all ${
+                      errors.unitPrice
+                        ? "border-danger focus:border-danger focus:ring-danger bg-danger/5"
+                        : isPriceCustomized
+                        ? "border-warning/60 focus:border-warning focus:ring-warning bg-warning/5 font-semibold text-dark"
+                        : "border-gray-200 focus:border-primary focus:ring-primary bg-white"
+                    }`}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400 uppercase select-none">
+                    /{currentService?.unit || "kg"}
+                  </span>
+                </div>
+                {errors.unitPrice && (
+                  <p className="mt-1 text-[11px] text-danger flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {errors.unitPrice}
+                  </p>
+                )}
+                {isPriceCustomized && !errors.unitPrice && (
+                  <p className="mt-1 text-[11px] text-[#c2841d] font-medium flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                    Harga disesuaikan dari {formatRupiah(currentService?.price || 0)}/{currentService?.unit}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label
                   htmlFor={qtyInputId}
@@ -656,40 +770,6 @@ export default function NewTransactionPage() {
                     {errors.qty}
                   </p>
                 )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <span className="block text-xs font-semibold text-dark mb-1.5">
-                  Status Pembayaran <span className="text-danger">*</span>
-                </span>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPaymentStatus("unpaid")}
-                    className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-all ${
-                      paymentStatus === "unpaid"
-                        ? "border-warning bg-warning/10 text-[#c2841d] ring-1 ring-warning"
-                        : "border-gray-200 bg-gray-50/50 text-gray-600 hover:bg-gray-50"
-                    }`}
-                  >
-                    <Clock className="h-3.5 w-3.5" />
-                    Belum Lunas
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPaymentStatus("paid")}
-                    className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-all ${
-                      paymentStatus === "paid"
-                        ? "border-success bg-success/10 text-success ring-1 ring-success"
-                        : "border-gray-200 bg-gray-50/50 text-gray-600 hover:bg-gray-50"
-                    }`}
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    Lunas
-                  </button>
-                </div>
               </div>
 
               <div>
@@ -734,22 +814,56 @@ export default function NewTransactionPage() {
               </div>
             </div>
 
-            <div>
-              <label
-                htmlFor={notesInputId}
-                className="block text-xs font-semibold text-dark mb-1.5"
-              >
-                Catatan Khusus{" "}
-                <span className="text-gray-400 font-normal">(Opsional)</span>
-              </label>
-              <textarea
-                id={notesInputId}
-                rows={2}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Contoh: Pakaian putih dipisah, parfum aroma lavender"
-                className="w-full rounded-lg border border-gray-200 px-3.5 py-2 text-xs text-dark placeholder-gray-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary bg-white transition-all resize-none"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <span className="block text-xs font-semibold text-dark mb-1.5">
+                  Status Pembayaran <span className="text-danger">*</span>
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentStatus("unpaid")}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-all ${
+                      paymentStatus === "unpaid"
+                        ? "border-warning bg-warning/10 text-[#c2841d] ring-1 ring-warning"
+                        : "border-gray-200 bg-gray-50/50 text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    <Clock className="h-3.5 w-3.5" />
+                    Belum Lunas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentStatus("paid")}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-all ${
+                      paymentStatus === "paid"
+                        ? "border-success bg-success/10 text-success ring-1 ring-success"
+                        : "border-gray-200 bg-gray-50/50 text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Lunas
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor={notesInputId}
+                  className="block text-xs font-semibold text-dark mb-1.5"
+                >
+                  Catatan Khusus{" "}
+                  <span className="text-gray-400 font-normal">(Opsional)</span>
+                </label>
+                <textarea
+                  id={notesInputId}
+                  rows={2}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Contoh: Pakaian putih dipisah, parfum aroma lavender"
+                  className="w-full rounded-lg border border-gray-200 px-3.5 py-2 text-xs text-dark placeholder-gray-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary bg-white transition-all resize-none"
+                />
+              </div>
             </div>
 
             <div className="pt-2">
@@ -839,12 +953,17 @@ export default function NewTransactionPage() {
                 </div>
                 <div className="flex items-center justify-between text-xs">
                   <div>
-                    <p className="font-medium text-dark">
-                      {currentService?.name}
+                    <p className="font-medium text-dark flex items-center gap-1.5">
+                      <span>{currentService?.name}</span>
+                      {isPriceCustomized && (
+                        <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold bg-warning/15 text-[#c2841d]">
+                          Custom
+                        </span>
+                      )}
                     </p>
                     <p className="text-[11px] text-gray-400">
                       {parsedQty} {currentService?.unit} x{" "}
-                      {formatRupiah(currentService?.price || 0)}
+                      {formatRupiah(parsedUnitPrice)}
                     </p>
                   </div>
                   <span className="font-bold text-dark">
