@@ -76,6 +76,67 @@ function generateInvoice(): string {
   return `INV/${yy}${mm}${dd}/${rand}`;
 }
 
+function getErrorMessage(error: unknown): string {
+  if (!error) {
+    return "Terjadi kesalahan tidak diketahui saat mengambil data";
+  }
+
+  if (typeof error === "string" && error.trim().length > 0) {
+    return error.trim();
+  }
+
+  // 1. Kalau error punya properti .message yang berupa string dan tidak kosong, pakai itu
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof (error as { message: unknown }).message === "string" &&
+    (error as { message: string }).message.trim().length > 0
+  ) {
+    return (error as { message: string }).message.trim();
+  }
+
+  // 2. Kalau tidak, kalau error adalah instance dari Error, pakai error.toString()
+  if (error instanceof Error) {
+    const errStr = error.toString();
+    if (errStr && errStr !== "Error" && errStr !== "[object Object]") {
+      return errStr;
+    }
+  }
+
+  // 3. Kalau tidak, coba JSON.stringify(error)
+  try {
+    const json = JSON.stringify(error);
+    // 4. Kalau hasil JSON.stringify tetap "{}" (objek kosong), fallback ke Object.getOwnPropertyNames
+    if (json && json !== "{}") {
+      return json;
+    }
+  } catch {
+    // Ignore JSON serialization errors
+  }
+
+  // Fallback ke Object.getOwnPropertyNames untuk menangkap properti non-enumerable
+  if (typeof error === "object" && error !== null) {
+    try {
+      const propNames = Object.getOwnPropertyNames(error);
+      if (propNames.length > 0) {
+        const details = propNames
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .map((k) => `${k}: ${(error as any)[k]}`)
+          .join(", ");
+        if (details.trim().length > 0) {
+          return details;
+        }
+      }
+    } catch {
+      // Ignore reflection errors
+    }
+  }
+
+  // 5. Kalau semua gagal, fallback ke string generik
+  return "Terjadi kesalahan tidak diketahui saat mengambil data";
+}
+
 export default function ImportTransactionsPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -164,22 +225,25 @@ export default function ImportTransactionsPage() {
       ]);
 
       if (categoriesRes.error) {
-        const errMsg = `Gagal mengambil data Kategori: ${categoriesRes.error.message}`;
-        console.error("Gagal mengambil data Kategori:", categoriesRes.error);
+        const detail = getErrorMessage(categoriesRes.error);
+        const errMsg = `Gagal mengambil data Kategori: ${detail}`;
+        console.warn("Gagal mengambil data Kategori:", categoriesRes.error);
         setErrorMessage(errMsg);
         return;
       }
 
       if (servicesRes.error) {
-        const errMsg = `Gagal mengambil data Layanan: ${servicesRes.error.message}`;
-        console.error("Gagal mengambil data Layanan:", servicesRes.error);
+        const detail = getErrorMessage(servicesRes.error);
+        const errMsg = `Gagal mengambil data Layanan: ${detail}`;
+        console.warn("Gagal mengambil data Layanan:", servicesRes.error);
         setErrorMessage(errMsg);
         return;
       }
 
       if (paymentsRes.error) {
-        const errMsg = `Gagal mengambil data Metode Pembayaran: ${paymentsRes.error.message}`;
-        console.error("Gagal mengambil data Metode Pembayaran:", paymentsRes.error);
+        const detail = getErrorMessage(paymentsRes.error);
+        const errMsg = `Gagal mengambil data Metode Pembayaran: ${detail}`;
+        console.warn("Gagal mengambil data Metode Pembayaran:", paymentsRes.error);
         setErrorMessage(errMsg);
         return;
       }
@@ -295,9 +359,8 @@ export default function ImportTransactionsPage() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err: unknown) {
-      console.error("Terjadi kesalahan saat men-generate template Excel:", err);
-      const msg =
-        err instanceof Error ? err.message : "Gagal mengunduh template.";
+      console.warn("Terjadi kesalahan saat men-generate template Excel:", err);
+      const msg = getErrorMessage(err);
       setErrorMessage(`Gagal men-generate template: ${msg}`);
     } finally {
       setIsDownloadingTemplate(false);
@@ -453,7 +516,8 @@ export default function ImportTransactionsPage() {
 
         setParsedRows(normalized);
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "Gagal memproses file.";
+        console.warn("Terjadi kesalahan saat membaca spreadsheet:", err);
+        const msg = getErrorMessage(err);
         setErrorMessage(`Terjadi kesalahan saat membaca spreadsheet: ${msg}`);
       } finally {
         setIsProcessing(false);
@@ -739,7 +803,8 @@ export default function ImportTransactionsPage() {
 
       setSavedCount(insertedCount);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Gagal menyimpan batch.";
+      console.warn("Terjadi kesalahan saat batch insert:", err);
+      const msg = getErrorMessage(err);
       setErrorMessage(`Terjadi kesalahan saat batch insert: ${msg}`);
     } finally {
       setIsProcessing(false);
