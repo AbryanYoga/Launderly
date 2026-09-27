@@ -158,7 +158,8 @@ export default function NewTransactionPage() {
   const [qty, setQty] = useState<string>("1");
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("unpaid");
   const [notes, setNotes] = useState("");
-  const [invoiceNumber, setInvoiceNumber] = useState(generateInvoice);
+  const [invoiceNumber, setInvoiceNumber] = useState<string>("");
+  const [estimatedDate, setEstimatedDate] = useState<string>("");
 
   const [errors, setErrors] = useState<{
     name?: string;
@@ -221,6 +222,11 @@ export default function NewTransactionPage() {
   }, []);
 
   useEffect(() => {
+    setInvoiceNumber(generateInvoice());
+    setEstimatedDate(getEstimatedCompletion());
+  }, []);
+
+  useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(null), 5000);
     return () => clearTimeout(timer);
@@ -239,7 +245,6 @@ export default function NewTransactionPage() {
     currentService !== undefined &&
     !isNaN(parseFloat(unitPrice)) &&
     parseFloat(unitPrice) !== currentService.price;
-  const estimatedDate = getEstimatedCompletion();
 
   // Group services by category
   const servicesWithCategory = categories
@@ -327,7 +332,7 @@ export default function NewTransactionPage() {
       }
 
       // 1. Cek keunikan invoice di DB (retry maksimal 3 kali jika terjadi bentrok)
-      let finalInvoice = invoiceNumber;
+      let finalInvoice = invoiceNumber || generateInvoice();
       const maxRetries = 3;
       let isUnique = false;
 
@@ -413,6 +418,7 @@ export default function NewTransactionPage() {
     setSelectedServiceId(initialService.id);
     setUnitPrice(String(initialService.price));
     setInvoiceNumber(generateInvoice());
+    setEstimatedDate(getEstimatedCompletion());
     setErrors({});
     setIsSuccess(false);
   };
@@ -445,9 +451,12 @@ export default function NewTransactionPage() {
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+          <span
+            suppressHydrationWarning
+            className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary"
+          >
             <Sparkles className="h-3.5 w-3.5" />
-            Nota #{invoiceNumber}
+            Nota #{invoiceNumber || "INV/..."}
           </span>
         </div>
       </div>
@@ -909,8 +918,11 @@ export default function NewTransactionPage() {
                     </span>
                   </div>
                 </div>
-                <span className="font-mono text-[11px] font-bold text-primary">
-                  {invoiceNumber}
+                <span
+                  suppressHydrationWarning
+                  className="font-mono text-[11px] font-bold text-primary"
+                >
+                  {invoiceNumber || "INV/..."}
                 </span>
               </div>
 
@@ -992,8 +1004,11 @@ export default function NewTransactionPage() {
                     <p className="text-[10px] text-gray-400">
                       Estimasi Selesai (+2 Hari):
                     </p>
-                    <p className="text-[11px] font-semibold text-dark">
-                      {estimatedDate}
+                    <p
+                      suppressHydrationWarning
+                      className="text-[11px] font-semibold text-dark"
+                    >
+                      {estimatedDate || "Memuat perkiraan..."}
                     </p>
                   </div>
                 </div>
