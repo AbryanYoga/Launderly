@@ -23,19 +23,24 @@
 
 ## 📸 Screenshot
 
-### Dashboard
-![Dashboard](./docs/screenshots/dashboard.png)
+### Dashboard Utama & Live Monitoring Antrean
+Pemantauan metrik KPI harian secara real-time, status antrean cucian aktif, dan tabel transaksi terbaru.
+![Dashboard Utama](./docs/screenshots/dashboard.png)
 
-### Input Transaksi
+### Formulir Kasir & Input Transaksi Walk-in
+Pencatatan transaksi cepat dengan pengelompokan layanan per kategori, pilihan metode pembayaran, dan pratinjau nota instan.
 ![Input Transaksi](./docs/screenshots/input-transaksi.png)
 
-### Import Excel
+### Batch Import Transaksi & Generator Template Excel
+Fitur unggah spreadsheet dengan validasi otomatis per baris dan unduh file template dinamis berfitur dropdown.
 ![Import Excel](./docs/screenshots/import-excel.png)
 
-### Analytics
+### Analitik Bisnis & Business Intelligence
+Visualisasi grafik tren omzet harian, matriks jam sibuk (*peak hours*), retensi pelanggan, dan komposisi layanan.
 ![Analytics](./docs/screenshots/analytics.png)
 
-### Settings
+### Pengaturan Tarif & Master Data Operasional
+Pengelolaan master tarif layanan per kategori, opsi metode pembayaran aktif/nonaktif, dan profil identitas outlet.
 ![Settings](./docs/screenshots/settings.png)
 
 ---
