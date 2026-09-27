@@ -137,6 +137,56 @@ function getErrorMessage(error: unknown): string {
   return "Terjadi kesalahan tidak diketahui saat mengambil data";
 }
 
+function parseCleanNumber(val: unknown): number {
+  if (typeof val === "number") return val;
+  if (!val) return 0;
+  let str = String(val).trim().replace(/^Rp\.?\s*/i, "").trim();
+  // Format: 24.000,00 (Indonesian with decimal)
+  if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(str)) {
+    str = str.replace(/\./g, "").replace(",", ".");
+  }
+  // Format: 24,000.00 (US with decimal)
+  else if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(str)) {
+    str = str.replace(/,/g, "");
+  }
+  // Format: 24.000 (Indonesian thousands without decimal)
+  else if (/^\d{1,3}(\.\d{3})+$/.test(str)) {
+    str = str.replace(/\./g, "");
+  }
+  // Format: 2,5 (decimal comma)
+  else if (/^\d+,\d+$/.test(str)) {
+    str = str.replace(",", ".");
+  } else {
+    str = str.replace(/[^0-9.-]+/g, "");
+  }
+  const parsed = parseFloat(str);
+  return isNaN(parsed) ? 0 : parsed;
+}
+
+function parseCleanDate(val: unknown): string {
+  if (!val) return new Date().toISOString().split("T")[0];
+  if (val instanceof Date) {
+    if (!isNaN(val.getTime())) {
+      return val.toISOString().split("T")[0];
+    }
+  }
+  const str = String(val).trim();
+  // Check if it's an Excel serial number e.g. 46291
+  if (/^\d{4,6}(\.\d+)?$/.test(str)) {
+    const serial = parseFloat(str);
+    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+    const jsDate = new Date(excelEpoch.getTime() + serial * 86400000);
+    if (!isNaN(jsDate.getTime())) {
+      return jsDate.toISOString().split("T")[0];
+    }
+  }
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    return parsed.toISOString().split("T")[0];
+  }
+  return new Date().toISOString().split("T")[0];
+}
+
 export default function ImportTransactionsPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -389,7 +439,7 @@ export default function ImportTransactionsPage() {
     reader.onload = (e) => {
       try {
         const buffer = e.target?.result as ArrayBuffer;
-        const workbook = XLSX.read(buffer, { type: "array" });
+        const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
         const rawJson: Record<string, unknown>[] = XLSX.utils.sheet_to_json(
@@ -409,12 +459,17 @@ export default function ImportTransactionsPage() {
         const defaultPM = activePMs[0];
 
         const normalized: ParsedRow[] = rawJson.map((row) => {
-          const findKey = (candidates: string[]): string => {
+          const findRaw = (candidates: string[]): unknown => {
             const keys = Object.keys(row);
             const found = keys.find((k) =>
               candidates.includes(k.trim().toLowerCase())
             );
-            return found ? String(row[found]).trim() : "";
+            return found ? row[found] : "";
+          };
+
+          const findKey = (candidates: string[]): string => {
+            const raw = findRaw(candidates);
+            return raw !== undefined && raw !== null ? String(raw).trim() : "";
           };
 
           const nama = findKey([
@@ -424,7 +479,7 @@ export default function ImportTransactionsPage() {
             "customer",
             "customer name",
           ]);
-          const hp = findKey([
+          let hp = findKey([
             "nomor hp",
             "no hp",
             "telepon",
@@ -432,6 +487,17 @@ export default function ImportTransactionsPage() {
             "whatsapp",
             "no. hp",
           ]);
+          // Pulihkan angka 0 di depan nomor handphone jika terpotong format numerik Excel
+          if (
+            hp &&
+            !hp.startsWith("0") &&
+            !hp.startsWith("+") &&
+            !hp.startsWith("62") &&
+            /^8[0-9]{8,12}$/.test(hp)
+          ) {
+            hp = "0" + hp;
+          }
+
           const kategoriRaw = findKey([
             "kategori",
             "category",
@@ -446,9 +512,15 @@ export default function ImportTransactionsPage() {
             "service",
             ...(!findKey(["kategori", "category"]) ? ["jenis layanan"] : []),
           ]);
-          const beratRaw = findKey(["berat", "qty", "kuantitas", "weight"]);
-          const totalRaw = findKey(["total", "biaya", "harga", "grand total"]);
-          const tanggalRaw = findKey(["tanggal", "date", "tgl"]);
+          const berat = parseCleanNumber(
+            findRaw(["berat", "qty", "kuantitas", "weight"])
+          );
+          const total = parseCleanNumber(
+            findRaw(["total", "biaya", "harga", "grand total"])
+          );
+          const tanggal = parseCleanDate(
+            findRaw(["tanggal", "date", "tgl"])
+          );
           const statusBayarRaw = findKey([
             "status bayar",
             "status pembayaran",
@@ -465,8 +537,6 @@ export default function ImportTransactionsPage() {
             "cara bayar",
           ]);
 
-          const berat = parseFloat(beratRaw) || 0;
-          const total = parseFloat(totalRaw.replace(/[^0-9.-]+/g, "")) || 0;
           const statusBayar =
             statusBayarRaw.toLowerCase() === "lunas" ||
             statusBayarRaw.toLowerCase() === "paid"
@@ -504,7 +574,7 @@ export default function ImportTransactionsPage() {
             layanan: layanan || "-",
             berat,
             total,
-            tanggal: tanggalRaw || new Date().toISOString().split("T")[0],
+            tanggal,
             statusBayar,
             metodeBayar: metodeBayarRaw,
             resolvedPaymentName,
@@ -968,13 +1038,18 @@ export default function ImportTransactionsPage() {
               <button
                 type="button"
                 onClick={handleBatchSave}
-                disabled={isProcessing || validRows.length === 0}
+                disabled={isProcessing || validRows.length === 0 || savedCount !== null}
                 className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-primary/90 disabled:opacity-50 transition-all"
               >
                 {isProcessing ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Menyimpan...
+                  </>
+                ) : savedCount !== null ? (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 text-white" />
+                    Tersimpan ({savedCount})
                   </>
                 ) : (
                   <>
